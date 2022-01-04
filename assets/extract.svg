@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-labelledby="title"
+aria-describedby="desc" role="img" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <title>Archive Folder</title>
+  <desc>A line styled icon from Orion Icon Library.</desc>
+  <path data-name="layer1"
+  fill="none" stroke="#202020" stroke-miterlimit="10" stroke-width="2" d="M39 54v8m0-20V2m-4 40h8v12h-8z"
+  stroke-linejoin="round" stroke-linecap="round"></path>
+  <path data-name="layer2" d="M55 34h-2V2H9v60h44v-8h2a2 2 0 0 0 2-2V36a2 2 0 0 0-2-2z"
+  fill="none" stroke="#202020" stroke-miterlimit="10" stroke-width="2" stroke-linejoin="round"
+  stroke-linecap="round"></path>
+  <path data-name="layer1" fill="none" stroke="#202020" stroke-miterlimit="10"
+  stroke-width="2" d="M39 34h-4m8-4h-4m0-4h-4m8-4h-4m0-4h-4m8-4h-4m0-4h-4"
+  stroke-linejoin="round" stroke-linecap="round"></path>
+</svg>

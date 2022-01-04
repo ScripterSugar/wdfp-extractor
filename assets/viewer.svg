@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-labelledby="title"
+aria-describedby="desc" role="img" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <title>Responsive</title>
+  <desc>A line styled icon from Orion Icon Library.</desc>
+  <path data-name="layer1"
+  fill="none" stroke="#202020" stroke-miterlimit="10" stroke-width="2" d="M2 2h14v14H2z"
+  stroke-linejoin="round" stroke-linecap="round"></path>
+  <path data-name="layer2" fill="none" stroke="#202020" stroke-miterlimit="10"
+  stroke-width="2" d="M2 48h14v14H2zm0-23h14v14H2z" stroke-linejoin="round"
+  stroke-linecap="round"></path>
+  <path data-name="layer1" fill="none" stroke="#202020" stroke-miterlimit="10"
+  stroke-width="2" d="M25 2h14v14H25z" stroke-linejoin="round" stroke-linecap="round"></path>
+  <path data-name="layer2" fill="none" stroke="#202020" stroke-miterlimit="10"
+  stroke-width="2" d="M27 50h10v10H27z" stroke-linejoin="round" stroke-linecap="round"></path>
+  <path data-name="layer1" fill="none" stroke="#202020" stroke-miterlimit="10"
+  stroke-width="2" d="M26 26h12v12H26zM48 2h14v14H48z" stroke-linejoin="round"
+  stroke-linecap="round"></path>
+  <path data-name="layer2" fill="none" stroke="#202020" stroke-miterlimit="10"
+  stroke-width="2" d="M51 51h8v8h-8z" stroke-linejoin="round" stroke-linecap="round"></path>
+  <path data-name="layer1" fill="none" stroke="#202020" stroke-miterlimit="10"
+  stroke-width="2" d="M50 27h10v10H50z" stroke-linejoin="round" stroke-linecap="round"></path>
+</svg>

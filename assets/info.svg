@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-labelledby="title"
+aria-describedby="desc" role="img" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <title>New Message</title>
+  <desc>A line styled icon from Orion Icon Library.</desc>
+  <path data-name="layer2"
+  d="M51.834 21.998A12.082 12.082 0 0 1 52 24v26a12 12 0 0 1-12 12H14A12 12 0 0 1 2 50V24a12 12 0 0 1 12-12h26a12.115 12.115 0 0 1 2.001.166"
+  fill="none" stroke="#202020" stroke-miterlimit="10" stroke-width="2" stroke-linejoin="round"
+  stroke-linecap="round"></path>
+  <circle data-name="layer1" cx="52" cy="12" r="10" fill="none" stroke="#202020"
+  stroke-miterlimit="10" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></circle>
+</svg>
