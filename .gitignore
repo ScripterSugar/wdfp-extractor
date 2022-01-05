@@ -24,6 +24,7 @@ release/build
 
 .idea
 npm-debug.log.*
+yarn.lock
 *.css.d.ts
 *.sass.d.ts
 *.scss.d.ts
