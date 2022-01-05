@@ -10,6 +10,7 @@ pids
 # Coverage directory used by tools like istanbul
 coverage
 .eslintcache
+yarn.lock*
 
 # Dependency directory
 # https://www.npmjs.org/doc/misc/npm-faq.html#should-i-check-my-node_modules-folder-into-git
@@ -24,7 +25,6 @@ release/build
 
 .idea
 npm-debug.log.*
-yarn.lock
 *.css.d.ts
 *.sass.d.ts
 *.scss.d.ts
