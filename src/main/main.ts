@@ -36,8 +36,8 @@ ipcMain.on('showOpenDialog', async (event, arg) => {
 
   event.reply('showOpenDialog', returnedPath);
 });
-ipcMain.on('openDirectory', async (event, path) => {
-  shell.openPath(path)
+ipcMain.on('openDirectory', async (event, openPath) => {
+  shell.openPath(openPath);
 });
 ipcMain.on('startExtraction', async (event, rootDir) => {
   await extractionProcess(rootDir);
