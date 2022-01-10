@@ -5,4 +5,5 @@ export default styled.p`
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+  margin: 0;
 `;

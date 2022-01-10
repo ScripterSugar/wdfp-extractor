@@ -1,11 +1,11 @@
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { useEffect, useRef, useState } from 'react';
 import settingsIcon from '../../assets/settings.svg';
 import extractIcon from '../../assets/extract.svg';
 import viewerIcon from '../../assets/viewer.svg';
 import folderIcon from '../../assets/folder.svg';
-import theoSpin from '../../assets/theospin.gif';
+import theoSpin from '../../assets/theospin.png';
 import infoIcon from '../../assets/info.svg';
 import arrowLeftIcon from '../../assets/arrowLeft.svg';
 import theoBackground from '../../assets/backgrounds/beast_event.jpg';
@@ -32,6 +32,20 @@ const AppMainLayout = styled.div`
   > * {
     flex-shrink: 0;
   }
+`;
+const rotation = keyframes`
+    from{
+        transform: rotate(0deg);
+    }
+
+    to{
+        transform: rotate(360deg);
+    }
+
+`;
+
+const SpinImg = styled.img`
+  animation: ${rotation} 0.5s ${(props) => props.animation || 'linear'} infinite;
 `;
 
 const ExpandButton = styled(WfButton)`
@@ -60,10 +74,23 @@ const DevConsoleInner = styled.div`
   }
 `;
 
+const ModalActions = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 24px;
+
+  > * + * {
+    margin-left: 8px;
+  }
+`;
+
 const AppContent = () => {
   const [targetDir, setTargetDir] = usePermanentState(null, 'TARGET_DIR');
   const [showDevConsole, setShowDevConsole] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionError, setExtractionError] = useState(null);
   const [devConsoleLogs, setDevConsoleLogs, devConsoleLogsRef] = useStateRef(
     []
   );
@@ -82,14 +109,75 @@ const AppContent = () => {
     }
   };
 
+  const responseExtraction = (res) => {
+    window.electron.ipcRenderer.responseExtraction(res);
+    setExtractionError(null);
+  };
+
+  const handleExtractionError = (error) => {
+    switch (error) {
+      case 'JAVA_NOT_INSTALLED': {
+        setExtractionError({
+          error:
+            'To run this program, you need the java installed in your machine.\nPlease refer to the Installation guide of github page.',
+          ref: 'https://github.com/',
+          actions: [
+            <WfDangerButton onClick={() => responseExtraction('done')}>
+              Abort
+            </WfDangerButton>,
+          ],
+        });
+
+        break;
+      }
+      case 'DEVICE_NOT_FOUND': {
+        setExtractionError({
+          error:
+            'No connected devices found from adb.\nMake sure you have your emulator running or the device being connected.',
+          ref: 'https://github.com/',
+          actions: [
+            <WfDangerButton onClick={() => responseExtraction('done')}>
+              Abort
+            </WfDangerButton>,
+            <WfButton onClick={() => responseExtraction('retry')}>
+              Retry
+            </WfButton>,
+          ],
+        });
+
+        break;
+      }
+      default: {
+        setExtractionError({
+          error,
+          actions: [
+            <WfDangerButton onClick={() => responseExtraction('done')}>
+              Abort
+            </WfDangerButton>,
+            <WfButton onClick={() => responseExtraction('retry')}>
+              Retry
+            </WfButton>,
+          ],
+        });
+      }
+    }
+  };
+
   const startExtraction = async () => {
-    const ipcPromise = getIpcReturn('extractionDone');
     setIsExtracting(true);
     setDevConsoleLogs([]);
     setShowDevConsole(true);
     window.electron.ipcRenderer.startExtraction(targetDir);
 
-    await ipcPromise;
+    let ipcResponse;
+
+    while (!ipcResponse?.success) {
+      ipcResponse = await getIpcReturn('extractionResponseMain');
+
+      if (ipcResponse?.error) {
+        handleExtractionError(ipcResponse.error);
+      }
+    }
 
     setIsExtracting(false);
   };
@@ -114,7 +202,10 @@ const AppContent = () => {
   return (
     <div
       id="app-main"
-      style={{ background: `url(${theoBackground})`, backgroundSize: 'cover' }}
+      style={{
+        background: `url(${theoBackground})`,
+        backgroundSize: 'cover',
+      }}
     >
       <AppMainLayout>
         <WfCard style={{ width: '50%', height: '100%' }}>
@@ -129,7 +220,7 @@ const AppContent = () => {
             <img src={extractIcon} alt="extract" width={24} />
             Extract Data
             {isExtracting && (
-              <img
+              <SpinImg
                 src={theoSpin}
                 style={{ marginLeft: 8 }}
                 alt="info"
@@ -149,7 +240,7 @@ const AppContent = () => {
             {targetDir ? 'Change' : 'Set'} Extraction Directory
           </WfButton>
           <div>
-            <Typography style={{ width: '100%' }}>
+            <Typography style={{ width: '100%', marginTop: 16 }}>
               {targetDir?.replace(/\\/g, '/') || 'N/A'}
             </Typography>
           </div>
@@ -205,8 +296,28 @@ const AppContent = () => {
             justifyContent: 'center',
           }}
         >
-          <img src={theoSpin} alt="info" width={24} />
+          <SpinImg animation="ease-in" src={theoSpin} alt="info" width={24} />
         </div>
+      </Modal>
+      <Modal style={{ width: 720 }} open={!!extractionError} onClose={() => {}}>
+        <Typography style={{ marginBottom: 16 }}>
+          Error occured during extraction.
+        </Typography>
+        <Typography style={{ whiteSpace: 'pre-wrap', marginBottom: 16 }}>
+          {extractionError?.error}
+        </Typography>
+        {extractionError?.ref && (
+          <a
+            style={{ margin: 0 }}
+            href="#"
+            onClick={() =>
+              window.electron.ipcRenderer.openExternal(extractionError.ref)
+            }
+          >
+            {extractionError.ref}
+          </a>
+        )}
+        <ModalActions>{extractionError?.actions}</ModalActions>
       </Modal>
     </div>
   );

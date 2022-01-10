@@ -1,8 +1,22 @@
+import fs from 'fs';
+import { exec, spawn } from 'child_process';
+import { NOX_PORT_LIST } from './constants';
+
 export const asyncMkdir = (...args) =>
   new Promise((resolve) => fs.mkdir(...args, resolve));
 
 export const asyncReadFile = (...args) =>
   new Promise((resolve) => fs.readFile(...args, (err, data) => resolve(data)));
+
+export const asyncReadDir = (...args) =>
+  new Promise((resolve, reject) =>
+    fs.readdir(...args, (err, data) => (err ? reject(err) : resolve(data)))
+  );
+
+export const asyncRename = (...args) =>
+  new Promise((resolve, reject) =>
+    fs.rename(...args, (err, data) => (err ? reject(err) : resolve(data)))
+  );
 
 export const asyncExec = async (command: string): Promise<string> =>
   new Promise((resolve, reject) =>
@@ -80,22 +94,4 @@ export const refineLs = (lsResult): Array<LSResult> => {
       };
     })
     .filter((val) => val);
-};
-
-export const getDeviceList = async () => {
-  const devices = await asyncExec(`${ADB_PATH} devices`);
-
-  return devices
-    .split(/[\r]{0,}\n/)
-    .slice(1)
-    .filter((val) => val);
-};
-
-export const tryConnect = async () => {
-  await Promise.all(
-    NOX_PORT_LIST.map((port) =>
-      asyncExec(`${ADB_PATH} connect 127.0.0.1:${port}`)
-    )
-  );
-  return true;
 };

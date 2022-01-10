@@ -33,6 +33,7 @@ const Modal = ({
   open,
   children,
   onClose,
+  ...rest
 }: {
   open: boolean;
   children: React.ReactChildren;
@@ -45,7 +46,7 @@ const Modal = ({
       <ModalLayout>
         <Backdrop onClick={onClose} />
         <ModalContent>
-          <WfCard>{children}</WfCard>
+          <WfCard {...rest}>{children}</WfCard>
         </ModalContent>
       </ModalLayout>
     </>,

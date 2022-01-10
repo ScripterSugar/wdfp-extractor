@@ -11,6 +11,10 @@ module.exports = {
     'no-restricted-syntax': 'off',
     'no-underscore-dangle': 'off',
     'no-await-in-loop': 'off',
+    'max-classes-per-file': 'off',
+    'no-continue': 'off',
+    'jsx-a11y/anchor-is-valid': 'off',
+    'react/jsx-props-no-spreading': 'off',
     'prettier/prettier': [
       'error',
       {

@@ -17,7 +17,7 @@ import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import logger from './wf/logger';
-import extractionProcess from './wf';
+import WfExtractor from './wf';
 
 export default class AppUpdater {
   constructor() {
@@ -36,13 +36,101 @@ ipcMain.on('showOpenDialog', async (event, arg) => {
 
   event.reply('showOpenDialog', returnedPath);
 });
+
 ipcMain.on('openDirectory', async (event, openPath) => {
   shell.openPath(openPath);
 });
-ipcMain.on('startExtraction', async (event, rootDir) => {
-  await extractionProcess(rootDir);
 
-  event.reply('extractionDone');
+class ExtractionProcessor {
+  packetResolver: (any) => void;
+
+  awaitNextPacket = () => {
+    return new Promise((resolve) => {
+      this.packetResolver = resolve;
+    });
+  };
+
+  resolveAwait = (data) => {
+    if (this.packetResolver) {
+      this.packetResolver(data);
+      this.packetResolver = null;
+    }
+  };
+}
+
+const extractionProcessor = new ExtractionProcessor();
+
+ipcMain.on('extractionResponseRenderer', async (event, response) => {
+  extractionProcessor.resolveAwait(response);
+});
+
+ipcMain.on('startExtraction', async (event, rootDir) => {
+  let replyPacket;
+  let extractionPhase = 0;
+
+  const wfExtractor = new WfExtractor();
+
+  wfExtractor.setRootPath(rootDir);
+
+  while (replyPacket !== 'done') {
+    console.log(`TRYING EXTRACTION, Current Phase ${extractionPhase}`);
+    try {
+      if (extractionPhase <= 0) {
+        await wfExtractor.init();
+        extractionPhase = 1;
+      }
+
+      if (extractionPhase <= 1) {
+        const deviceList = await wfExtractor.getDeviceList();
+
+        if (!deviceList.length) {
+          event.reply('extractionResponseMain', { error: 'DEVICE_NOT_FOUND' });
+          replyPacket = await extractionProcessor.awaitNextPacket();
+          continue;
+        } else {
+          extractionPhase = 2;
+        }
+      }
+
+      if (extractionPhase <= 2) {
+        await wfExtractor.connectAdbShell();
+        extractionPhase = 3;
+      }
+
+      if (extractionPhase <= 3) {
+        await wfExtractor.indexWfAssets();
+        await wfExtractor.dumpWfAssets();
+        await wfExtractor.mergeAssets();
+        extractionPhase = 4;
+      }
+
+      if (extractionPhase <= 4) {
+        await wfExtractor.dumpAndExtractApk();
+        extractionPhase = 5;
+      }
+
+      if (extractionPhase <= 5) {
+        await wfExtractor.extractMasterTable();
+        extractionPhase = 6;
+      }
+
+      if (extractionPhase <= 6) {
+        await wfExtractor.extractImageAssets();
+        extractionPhase = 7;
+      }
+
+      break;
+    } catch (err) {
+      logger.log(`Error ocurred while extraction: ${err?.message || err}`);
+
+      event.reply('extractionResponseMain', {
+        error: err?.message || 'UNKNOWN',
+      });
+      replyPacket = await extractionProcessor.awaitNextPacket();
+    }
+  }
+
+  event.reply('extractionResponseMain', { success: true });
 });
 
 if (process.env.NODE_ENV === 'production') {

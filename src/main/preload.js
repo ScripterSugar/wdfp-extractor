@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, shell } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
   ipcRenderer: {
@@ -11,11 +11,20 @@ contextBridge.exposeInMainWorld('electron', {
     startExtraction(rootDir) {
       ipcRenderer.send('startExtraction', rootDir);
     },
+    openExternal(external) {
+      shell.openExternal(external);
+    },
+    responseExtraction(response) {
+      ipcRenderer.send('extractionResponseRenderer', response);
+    },
     on(channel, func) {
       ipcRenderer.on(channel, (event, ...args) => func(...args));
     },
     once(channel, func) {
       ipcRenderer.once(channel, (event, ...args) => func(...args));
+    },
+    removeAllListeners(channel) {
+      ipcRenderer.removeAllListeners(channel);
     },
   },
 });

@@ -1,6 +1,6 @@
-export const ELIGIBLE_PATH_PREFIXES = [
-  'dump/upload/',
-  'dump/medium_upload/',
+export const ELIGIBLE_PATH_PREFIXES = ['dump/upload/', 'dump/medium_upload/'];
+
+export const MERGEABLE_PATH_PREFIXES = [
   'dump/android_upload/',
   'dump/android_small_upload/',
   'dump/android_medium_upload/',
