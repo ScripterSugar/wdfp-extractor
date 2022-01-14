@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('electron', {
     openExternal(external) {
       shell.openExternal(external);
     },
+    getAppVersion() {
+      ipcRenderer.send('getAppVersion');
+    },
     responseExtraction(response) {
       ipcRenderer.send('extractionResponseRenderer', response);
     },

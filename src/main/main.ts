@@ -37,6 +37,10 @@ ipcMain.on('showOpenDialog', async (event, arg) => {
   event.reply('showOpenDialog', returnedPath);
 });
 
+ipcMain.on('getAppVersion', async (event) => {
+  event.reply('appVersion', app.getVersion());
+});
+
 ipcMain.on('openDirectory', async (event, openPath) => {
   shell.openPath(openPath);
 });
@@ -98,14 +102,14 @@ ipcMain.on('startExtraction', async (event, rootDir) => {
       }
 
       if (extractionPhase <= 3) {
-        await wfExtractor.indexWfAssets();
-        await wfExtractor.dumpWfAssets();
-        await wfExtractor.mergeAssets();
+        await wfExtractor.dumpAndExtractApk();
         extractionPhase = 4;
       }
 
       if (extractionPhase <= 4) {
-        await wfExtractor.dumpAndExtractApk();
+        await wfExtractor.indexWfAssets();
+        await wfExtractor.dumpWfAssets();
+        await wfExtractor.mergeAssets();
         extractionPhase = 5;
       }
 

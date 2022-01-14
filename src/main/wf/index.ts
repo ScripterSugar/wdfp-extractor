@@ -17,6 +17,7 @@ import {
   asyncReadFile,
   asyncRename,
   refineLs,
+  spawnCommand,
 } from './helpers';
 import {
   CHARACTER_SPRITE_PRESETS,
@@ -70,6 +71,10 @@ class AdbShell {
 
   shell = ChildProcess;
 
+  execResolver: (any) => void;
+
+  execRejector: (any) => void;
+
   constructor() {
     this.shell = spawn(`${ADB_PATH} shell`, { shell: true });
 
@@ -90,8 +95,9 @@ class AdbShell {
 
     this.shell.stdin.write(`${command}\r\n`);
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       this.execResolver = resolve;
+      this.execRejector = reject;
     });
   };
 
@@ -108,6 +114,7 @@ class AdbShell {
           this.outputDebounce.out.chunks.reduce((acc, cur) => acc + cur, '')
         );
         this.execResolver = null;
+        this.execRejector = null;
         this.outputDebounce.out.chunks = [];
       }, 100);
     }
@@ -115,9 +122,10 @@ class AdbShell {
 
   onReceiveStdErr = (data) => {
     const received = data.toString();
-    if (this.execResolver) {
-      this.execResolver(received);
+    if (this.execRejector) {
+      this.execRejector(received);
       this.execResolver = null;
+      this.execRejector = null;
     }
   };
 
@@ -209,11 +217,17 @@ class WfExtractor {
   };
 
   indexWfAssets = async () => {
-    const foundWfPath = (
-      await this.adbShell.exec(
-        'find /data/data -name "*4d576b424178c5b2b253a2dd5aa3d78fa74ef3*"'
-      )
-    ).split('/upload')[0];
+    try {
+      const foundWfPath = (
+        await this.adbShell.exec(
+          'find /data/data -name "*4d576b424178c5b2b253a2dd5aa3d78fa74ef3*"'
+        )
+      ).split('/upload')[0];
+    } catch (err) {
+      console.log(err);
+
+      throw new Error('PROHIBITED_DATA_PERMISSION');
+    }
 
     if (!foundWfPath) throw new Error('ADB_ASSET_PATH_NOT_FOUND');
 

@@ -6,6 +6,7 @@ import extractIcon from '../../assets/extract.svg';
 import viewerIcon from '../../assets/viewer.svg';
 import folderIcon from '../../assets/folder.svg';
 import theoSpin from '../../assets/theospin.png';
+import discord from '../../assets/discord.png';
 import infoIcon from '../../assets/info.svg';
 import arrowLeftIcon from '../../assets/arrowLeft.svg';
 import theoBackground from '../../assets/backgrounds/beast_event.jpg';
@@ -91,6 +92,7 @@ const AppContent = () => {
   const [showDevConsole, setShowDevConsole] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionError, setExtractionError] = useState(null);
+  const [appVersion, setAppVersion] = useState('UNKNOWN');
   const [devConsoleLogs, setDevConsoleLogs, devConsoleLogsRef] = useStateRef(
     []
   );
@@ -117,7 +119,7 @@ const AppContent = () => {
   const handleExtractionError = (error) => {
     switch (error) {
       case 'JAVA_NOT_INSTALLED': {
-        setExtractionError({
+        return setExtractionError({
           error:
             'To run this program, you need the java installed in your machine.\nPlease refer to the Installation guide of github page.',
           ref: 'https://github.com/',
@@ -127,11 +129,9 @@ const AppContent = () => {
             </WfDangerButton>,
           ],
         });
-
-        break;
       }
       case 'DEVICE_NOT_FOUND': {
-        setExtractionError({
+        return setExtractionError({
           error:
             'No connected devices found from adb.\nMake sure you have your emulator running or the device being connected.',
           ref: 'https://github.com/',
@@ -144,8 +144,24 @@ const AppContent = () => {
             </WfButton>,
           ],
         });
-
-        break;
+      }
+      case 'PROHIBITED_DATA_PERMISSION': {
+        return setExtractionError({
+          error:
+            'Connected device does not have permission to read data asset path.\n\nYou can still try to execute full asset dump,\nBut it will might take long time and can still be failed.\n',
+          ref: 'https://github.com/',
+          actions: [
+            <WfDangerButton onClick={() => responseExtraction('done')}>
+              Abort
+            </WfDangerButton>,
+            <WfButton onClick={() => responseExtraction('retry')}>
+              Retry
+            </WfButton>,
+            <WfButton onClick={() => responseExtraction('retry')}>
+              Try Full dump
+            </WfButton>,
+          ],
+        });
       }
       default: {
         setExtractionError({
@@ -197,6 +213,14 @@ const AppContent = () => {
       setDevConsoleLogs(newDevConsoleLogs);
       devLogRef.current?.scrollTo(0, devLogRef.current?.scrollHeight);
     });
+
+    (async () => {
+      const ipcReturn = getIpcReturn('appVersion');
+
+      await window.electron.ipcRenderer.getAppVersion();
+
+      setAppVersion(await ipcReturn);
+    })();
   }, []); // eslint-disable-line
 
   return (
@@ -286,18 +310,42 @@ const AppContent = () => {
         )}
       </AppMainLayout>
       <Modal open={openInfoModal} onClose={() => setOpenInfoModal(false)}>
-        Created by | INASOM#3195
+        <Typography>World Flipper Data Extractor</Typography>
         <br />
-        <div
+        <Typography
           style={{
             display: 'flex',
-            width: '100%',
-            marginTop: 16,
-            justifyContent: 'center',
+            alignItems: 'center',
+            flexDirection: 'row',
           }}
         >
-          <SpinImg animation="ease-in" src={theoSpin} alt="info" width={24} />
-        </div>
+          V.{appVersion}
+          <SpinImg
+            animation="ease-in"
+            src={theoSpin}
+            alt="info"
+            width={24}
+            style={{ marginLeft: 8 }}
+          />
+        </Typography>
+        <br />
+        Created by | INASOM#3195
+        <br />
+        <WfButton
+          style={{
+            background: '#5865F2',
+            justifyContent: 'center',
+            height: 48,
+            marginTop: 16,
+          }}
+          onClick={() =>
+            window.electron.ipcRenderer.openExternal(
+              'https://discord.com/invite/worldflipper'
+            )
+          }
+        >
+          <img src={discord} alt="discord" style={{ width: 32, margin: 0 }} />
+        </WfButton>
       </Modal>
       <Modal style={{ width: 720 }} open={!!extractionError} onClose={() => {}}>
         <Typography style={{ marginBottom: 16 }}>
