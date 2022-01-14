@@ -148,7 +148,7 @@ const AppContent = () => {
       case 'PROHIBITED_DATA_PERMISSION': {
         return setExtractionError({
           error:
-            'Connected device does not have permission to read data asset path.\n\nYou can still try to execute full asset dump,\nBut it will might take long time and can still be failed.\n',
+            'Connected device does not have permission to read data asset path.\n\nYou can still try to execute full asset dump,\nBut it might take long time and can still be failed.\n',
           ref: 'https://github.com/',
           actions: [
             <WfDangerButton onClick={() => responseExtraction('done')}>

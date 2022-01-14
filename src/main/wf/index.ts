@@ -206,7 +206,7 @@ class WfExtractor {
       foundDevices = await getDeviceList();
     }
 
-    logger.log(`${foundDevices.length} devices found.`);
+    logger.log(`${foundDevices.length} device(s) found.`);
     return foundDevices;
   };
 
