@@ -416,7 +416,7 @@ class WfExtractor {
     const apkExtractionPath = `${this.ROOT_PATH}/apk-extract`;
 
     const packageInfoLine = await this.adbShell.exec(
-      `pm list packages -f | grep ${this.APK_NAME_KEY[this.target]}`
+      `pm list packages -f | grep ${this.APK_NAME_KEY[this.region]}`
     );
 
     const packageName = packageInfoLine
