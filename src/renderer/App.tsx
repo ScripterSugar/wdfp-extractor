@@ -309,7 +309,7 @@ const AppContent = () => {
         return setExtractionError({
           error:
             'To run this program, you need the java installed in your machine.\nPlease refer to the Installation guide of github page.',
-          ref: 'https://github.com/',
+          ref: 'https://www.java.com/en/download/',
           actions: [
             <WfDangerButton onClick={() => responseExtraction('done')}>
               Abort
@@ -351,7 +351,7 @@ const AppContent = () => {
         return setExtractionError({
           error:
             'No connected devices found from adb.\nMake sure you have your emulator running or the device being connected.',
-          ref: 'https://github.com/',
+          ref: 'https://github.com/ScripterSugar/wdfp-extractor',
           actions: [
             <WfDangerButton onClick={() => responseExtraction('done')}>
               Abort
@@ -366,7 +366,7 @@ const AppContent = () => {
         return setExtractionError({
           error:
             'Connected device does not have permission to read data asset path.\n\nYou can still try to execute full asset dump,\nBut it might take long time and can still be failed.\n',
-          ref: 'https://github.com/',
+          ref: 'https://github.com/ScripterSugar/wdfp-extractor',
           actions: [
             <WfDangerButton onClick={() => responseExtraction('done')}>
               Abort

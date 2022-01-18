@@ -89,8 +89,8 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "electron-react-boilerplate",
-      "repo": "electron-react-boilerplate"
+      "owner": "ScripterSugar",
+      "repo": "wdfp-extractor"
     }
   },
   "author": {
