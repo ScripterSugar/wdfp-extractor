@@ -166,11 +166,11 @@ class WfExtractor {
     jp: 'worldflipper',
   };
 
-  constructor({ target, rootDir } = {}) {
+  constructor({ region, rootDir } = {}) {
     this.metadata = {};
 
     this.setRootPath(rootDir || DEFAULT_ROOT_PATH);
-    this.target = target || 'jp';
+    this.region = region || 'jp';
   }
 
   setRootPath = (rootPath) => {
