@@ -35,7 +35,7 @@ Pixel 2, Pixel 4 XL
 
 ## Contribution
 
-I won't actively manage this repository as far as it works for me, so if you're having trouble using the tool on your side, you're likely have to fix the problem yourself. Please feel free to open any PR.
+I won't actively manage this repository as far as it works for me, so if you're having trouble using the tool on your side, in most cases you'll have to fix the problem yourself. You can still issue the tickets, but do not expect me to fix it. Please feel free to open any PR.
 
 
 
