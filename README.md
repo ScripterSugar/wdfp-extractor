@@ -1,4 +1,4 @@
-# wdfp-extractor
+# World Filpper Asset Extractor
 
 #### DISCLAIMER: All the rights of extracted assets belong to cygames/citail. I do not encourage you to use any of extracted assets in inappropriate purpose. If you use any assets extracted by this tool, you do so at your sole risk.
 
