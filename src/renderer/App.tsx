@@ -1,6 +1,6 @@
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import settingsIcon from '../../assets/settings.svg';
 import extractIcon from '../../assets/extract.svg';
 import viewerIcon from '../../assets/viewer.svg';
@@ -8,15 +8,20 @@ import folderIcon from '../../assets/folder.svg';
 import theoSpin from '../../assets/theospin.png';
 import discord from '../../assets/discord.png';
 import infoIcon from '../../assets/info.svg';
+import theoWalk from '../../assets/theoWalk.gif';
 import arrowLeftIcon from '../../assets/arrowLeft.svg';
 import theoBackground from '../../assets/backgrounds/beast_event.jpg';
 import './App.css';
 import WfCard from './components/WfCard';
-import WfButton, { WfDangerButton } from './components/WfButton';
+import WfButton, {
+  WfDangerButton,
+  WfSelectButton,
+} from './components/WfButton';
 import { usePermanentState, useStateRef } from './helpers/hooks';
 import { getIpcReturn } from './helpers';
-import Typography from './components/Typography';
+import Typography, { IndicatorTypo } from './components/Typography';
 import Modal from './components/Modal';
+import Switch from './components/Switch';
 
 const AppMainLayout = styled.div`
   display: flex;
@@ -47,6 +52,42 @@ const rotation = keyframes`
 
 const SpinImg = styled.img`
   animation: ${rotation} 0.5s ${(props) => props.animation || 'linear'} infinite;
+`;
+
+const LayoutFlex = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+`;
+const LayoutFlexColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+`;
+
+const LayoutFlexSpaceBetween = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+`;
+
+const LayoutFlexDivideHalf = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  > div {
+    width: 50%;
+  }
+
+  > div:first-child {
+    padding-right: 16px;
+  }
 `;
 
 const ExpandButton = styled(WfButton)`
@@ -85,7 +126,81 @@ const ModalActions = styled.div`
   > * + * {
     margin-left: 8px;
   }
+
+  &[data-dir='vertical'] {
+    flex-direction: column;
+
+    > * + * {
+      margin-left: 0;
+      margin-top: 8px;
+    }
+  }
 `;
+
+const ProgressWrapper = styled.div`
+  display: flex;
+  margin-top: 8px;
+  flex-direction: column;
+
+  > div {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+
+    > p {
+      font-weight: bold;
+      font-size: 0.8rem;
+    }
+  }
+
+  > div + div {
+    margin-top: 4px;
+  }
+`;
+
+const ProgressBarWrapper = styled.div`
+  height: 8px;
+  width: 100%;
+  background: white;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+`;
+
+const ProgressBar = styled.div`
+  height: 8px;
+  width: ${(props) => props.value}%;
+  background: #f2a242;
+`;
+
+const Progress = ({
+  progress,
+}: {
+  progress: { id: string; max: number; progress: number };
+}) => {
+  return (
+    <ProgressWrapper>
+      <div>
+        <Typography>
+          <img src={theoWalk} alt="loading" style={{ marginRight: 8 }} />
+          {progress.id}
+        </Typography>
+        <Typography>
+          ({progress.progress} / {progress.max}){' '}
+          {Math.round((progress.progress / progress.max) * 100)}%
+        </Typography>
+      </div>
+      <div>
+        <ProgressBarWrapper>
+          <ProgressBar
+            value={Math.round((progress.progress / progress.max) * 100)}
+          />
+        </ProgressBarWrapper>
+      </div>
+    </ProgressWrapper>
+  );
+};
 
 const AppContent = () => {
   const [targetDir, setTargetDir] = usePermanentState(null, 'TARGET_DIR');
@@ -93,11 +208,81 @@ const AppContent = () => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionError, setExtractionError] = useState(null);
   const [appVersion, setAppVersion] = useState('UNKNOWN');
+  const handleDataLogRef = useRef();
   const [devConsoleLogs, setDevConsoleLogs, devConsoleLogsRef] = useStateRef(
     []
   );
+  const [options, setOptions] = usePermanentState(
+    {
+      extractMaster: true,
+      extractImage: true,
+      processAtlas: false,
+      region: 'gl',
+    },
+    'EXTRACT_OPTION',
+    (val) => {
+      try {
+        return JSON.parse(val);
+      } catch (err) {
+        return {
+          extractMaster: true,
+          extractImage: true,
+          processAtlas: false,
+          region: 'gl',
+        };
+      }
+    },
+    JSON.stringify
+  );
   const [openInfoModal, setOpenInfoModal] = useState(false);
+  const [openSelectOption, setOpenSelectOption] = useState(false);
   const devLogRef = useRef();
+  const [progresses, setProgresses] = useState([]);
+
+  const onChangeOptions = (key, value) =>
+    setOptions({ ...options, [key]: value });
+
+  const handleDataLog = useCallback(
+    ({ type, data: { id, ...rest } }) => {
+      switch (type) {
+        case 'progressStart': {
+          setProgresses([
+            ...progresses,
+            {
+              id,
+              max: rest.max,
+              progress: 0,
+            },
+          ]);
+          return;
+        }
+        case 'progress': {
+          const newProgresses = progresses.slice();
+          const progressIdx = newProgresses.findIndex(
+            (progress) => progress.id === id
+          );
+          const currentProgress = newProgresses[progressIdx];
+          newProgresses.splice(progressIdx, 1, {
+            ...currentProgress,
+            progress: rest.progress,
+          });
+          setProgresses(newProgresses);
+          return;
+        }
+        case 'progressEnd': {
+          const newProgresses = progresses.slice();
+          setProgresses(newProgresses.filter((progress) => progress.id !== id));
+          return;
+        }
+        default: {
+          console.log('Error');
+        }
+      }
+    },
+    [progresses]
+  );
+
+  handleDataLogRef.current = handleDataLog;
 
   const changeTargetDir = async () => {
     const ipcPromise = getIpcReturn('showOpenDialog');
@@ -116,7 +301,9 @@ const AppContent = () => {
     setExtractionError(null);
   };
 
-  const handleExtractionError = (error) => {
+  const handleExtractionError = (errorString) => {
+    const [error, ...args] = errorString.split('/');
+
     switch (error) {
       case 'JAVA_NOT_INSTALLED': {
         return setExtractionError({
@@ -127,6 +314,36 @@ const AppContent = () => {
             <WfDangerButton onClick={() => responseExtraction('done')}>
               Abort
             </WfDangerButton>,
+          ],
+        });
+      }
+      case 'MULTIPLE_DEVICES_FOUND': {
+        return setExtractionError({
+          error:
+            'Multiple instances are connected to ADB. Please select the device you want to extract assets from.',
+          title: 'Please select the device',
+          actionDir: 'vertical',
+          actions: args.map((deviceName) => (
+            <WfButton
+              key={deviceName}
+              onClick={() => responseExtraction(`selectDevice${deviceName}`)}
+            >
+              {deviceName}
+            </WfButton>
+          )),
+        });
+      }
+      case 'APK_NOT_FOUND': {
+        return setExtractionError({
+          error:
+            'Failed to detect World Flipper installed on the designated device.\nPlease make sure you have World Flipper installed on your phone/emu, and downloaded all the assets.',
+          actions: [
+            <WfDangerButton onClick={() => responseExtraction('done')}>
+              Abort
+            </WfDangerButton>,
+            <WfButton onClick={() => responseExtraction('retry')}>
+              Retry
+            </WfButton>,
           ],
         });
       }
@@ -182,8 +399,9 @@ const AppContent = () => {
   const startExtraction = async () => {
     setIsExtracting(true);
     setDevConsoleLogs([]);
+    setOpenSelectOption(false);
     setShowDevConsole(true);
-    window.electron.ipcRenderer.startExtraction(targetDir);
+    window.electron.ipcRenderer.startExtraction(targetDir, options);
 
     let ipcResponse;
 
@@ -203,10 +421,13 @@ const AppContent = () => {
   };
 
   useEffect(() => {
-    window.electron.ipcRenderer.on('ipc-logger-log', (...args) => {
+    window.electron.ipcRenderer.on('ipc-logger-log', (message, type) => {
+      if (type === 'data') {
+        return handleDataLogRef.current(JSON.parse(message));
+      }
       const newDevConsoleLogs = [...(devConsoleLogsRef.current || [])];
 
-      newDevConsoleLogs.push(...args);
+      newDevConsoleLogs.push(message);
 
       newDevConsoleLogs.slice(0, 1000);
 
@@ -239,7 +460,11 @@ const AppContent = () => {
           </WfButton>
           <WfButton
             disabled={!targetDir || isExtracting}
-            onClick={targetDir && !isExtracting ? startExtraction : () => {}}
+            onClick={
+              targetDir && !isExtracting
+                ? () => setOpenSelectOption(true)
+                : () => {}
+            }
           >
             <img src={extractIcon} alt="extract" width={24} />
             Extract Data
@@ -305,6 +530,9 @@ const AppContent = () => {
               {devConsoleLogs.map((log) => (
                 <p>{log}</p>
               ))}
+              {progresses.map((progress) => (
+                <Progress key={progress.id} progress={progress} />
+              ))}
             </DevConsoleInner>
           </WfCard>
         )}
@@ -347,9 +575,85 @@ const AppContent = () => {
           <img src={discord} alt="discord" style={{ width: 32, margin: 0 }} />
         </WfButton>
       </Modal>
+      <Modal
+        style={{ width: 720 }}
+        open={!!openSelectOption}
+        onClose={() => {}}
+      >
+        <Typography style={{ marginBottom: 16 }}>
+          Select the extraction options.
+        </Typography>
+        <LayoutFlexColumn>
+          <LayoutFlexDivideHalf>
+            <LayoutFlexSpaceBetween>
+              <Typography>Extract master table</Typography>
+              <Switch
+                value={options.extractMaster}
+                onClick={() =>
+                  onChangeOptions('extractMaster', !options.extractMaster)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+          </LayoutFlexDivideHalf>
+          <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
+            <LayoutFlexSpaceBetween>
+              <Typography>Extract character image assets</Typography>
+
+              <Switch
+                value={options.extractImage}
+                onClick={() =>
+                  onChangeOptions('extractImage', !options.extractImage)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+            <LayoutFlexSpaceBetween>
+              <LayoutFlexColumn>
+                <Typography>Process image assets by atlas</Typography>
+                <IndicatorTypo>Crop spritesheets / Generate GIF</IndicatorTypo>
+              </LayoutFlexColumn>
+              <Switch
+                data-disabled={!options.extractImage}
+                value={options.processAtlas}
+                onClick={() =>
+                  options.extractImage &&
+                  onChangeOptions('processAtlas', !options.processAtlas)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+          </LayoutFlexDivideHalf>
+        </LayoutFlexColumn>
+        <IndicatorTypo style={{ marginTop: 16, marginLeft: 4 }}>
+          APK region (version)
+        </IndicatorTypo>
+        <ModalActions style={{ marginTop: 8 }}>
+          <WfSelectButton
+            data-selected={options.region === 'gl'}
+            onClick={() => onChangeOptions('region', 'gl')}
+          >
+            Global (USA, EU, SEA, KR)
+          </WfSelectButton>
+          <WfSelectButton
+            data-selected={options.region === 'jp'}
+            onClick={() => onChangeOptions('region', 'jp')}
+          >
+            Japan
+          </WfSelectButton>
+        </ModalActions>
+        <ModalActions style={{ marginTop: 48 }}>
+          <WfDangerButton
+            style={{ width: 160 }}
+            onClick={() => setOpenSelectOption(false)}
+          >
+            Abort
+          </WfDangerButton>
+          <WfButton style={{ width: 160 }} onClick={startExtraction}>
+            Extract
+          </WfButton>
+        </ModalActions>
+      </Modal>
       <Modal style={{ width: 720 }} open={!!extractionError} onClose={() => {}}>
         <Typography style={{ marginBottom: 16 }}>
-          Error occured during extraction.
+          {extractionError?.title || 'Error occured during extraction.'}
         </Typography>
         <Typography style={{ whiteSpace: 'pre-wrap', marginBottom: 16 }}>
           {extractionError?.error}
@@ -365,7 +669,9 @@ const AppContent = () => {
             {extractionError.ref}
           </a>
         )}
-        <ModalActions>{extractionError?.actions}</ModalActions>
+        <ModalActions data-dir={extractionError?.actionDir}>
+          {extractionError?.actions}
+        </ModalActions>
       </Modal>
     </div>
   );

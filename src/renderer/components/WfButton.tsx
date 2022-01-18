@@ -61,4 +61,18 @@ export const WfDangerButton = styled(WfButton)`
   }
 `;
 
+export const WfSelectButton = styled(WfButton)`
+  &[data-selected='true'] {
+    background: #f2a241;
+    color: white;
+
+    &:hover {
+      background: #f2a241;
+    }
+    &:active {
+      background: #f2a241;
+    }
+  }
+`;
+
 export default WfButton;

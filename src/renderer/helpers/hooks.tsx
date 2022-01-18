@@ -2,17 +2,19 @@ import { useRef, useState } from 'react';
 
 export const usePermanentState = <T,>(
   defaultState: T,
-  permanentKey: string
+  permanentKey: string,
+  getter: (string) => any = (val) => val,
+  setter: (string) => any = (val) => val
 ): [T, React.Dispatch<React.SetStateAction<T>>] => {
   const [permanentValue, setPermanentValueOrigin] = useState(
-    localStorage.getItem(permanentKey) || defaultState
+    getter(localStorage.getItem(permanentKey)) || defaultState
   );
 
   const setPermanentValue = (newValue) => {
     setPermanentValueOrigin(newValue);
 
     if (newValue) {
-      localStorage.setItem(permanentKey, newValue);
+      localStorage.setItem(permanentKey, setter(newValue));
     } else {
       localStorage.removeItem(permanentKey);
     }

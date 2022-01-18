@@ -13,13 +13,16 @@ import { LSResult, WFExtractorMetaData } from './typedefs';
 import { digestWfFileName } from './digest';
 import {
   asyncExec,
+  asyncMkdir,
   asyncReadDir,
   asyncReadFile,
   asyncRename,
   refineLs,
+  sleep,
   spawnCommand,
 } from './helpers';
 import {
+  CHARACTER_AMF_PRESERTS,
   CHARACTER_SPRITE_PRESETS,
   DATEFORMAT_A,
   MERGEABLE_PATH_PREFIXES,
@@ -34,6 +37,13 @@ const getAssetPath = (...paths: string[]): string => {
   return path.join(RESOURCES_PATH, ...paths);
 };
 
+const DIR_CACHE = {};
+
+const createAndCacheDirectory = async (dir) => {
+  await asyncMkdir(dir, { recursive: true });
+  DIR_CACHE[dir] = true;
+};
+
 const DEFAULT_ROOT_PATH = 'D:/wfextract';
 const ADB_PATH = getAssetPath(`/adb/adb.exe`);
 const METADATA_PATH = (rootPath) => `${rootPath}/metadata.json`;
@@ -44,39 +54,36 @@ const getDeviceList = async () => {
   return devices
     .split(/[\r]{0,}\n/)
     .slice(1)
-    .filter((val) => val);
+    .filter((val) => val)
+    .map((val) => val.split('\t')[0]);
 };
 
 const tryConnect = async () => {
   await Promise.all(
-    NOX_PORT_LIST.map((port) =>
-      asyncExec(`${ADB_PATH} connect 127.0.0.1:${port}`)
-    )
+    NOX_PORT_LIST.map((port) => {
+      return asyncExec(`${ADB_PATH} connect 127.0.0.1:${port}`);
+    })
   );
   return true;
 };
 class AdbShell {
   drained = false;
 
-  outputDebounce = {
-    out: {
-      timeout: null,
-      chunks: [],
-    },
-    err: {
-      timeout: null,
-      chunks: [],
-    },
-  };
-
   shell = ChildProcess;
+
+  execResult = '';
 
   execResolver: (any) => void;
 
   execRejector: (any) => void;
 
-  constructor() {
-    this.shell = spawn(`${ADB_PATH} shell`, { shell: true });
+  DEVICE_ID: string;
+
+  constructor({ deviceId }) {
+    this.DEVICE_ID = deviceId;
+    this.shell = spawn(`${ADB_PATH} -s ${this.DEVICE_ID} shell`, {
+      shell: true,
+    });
 
     this.shell.stdout.on('data', this.onReceiveStdOut);
     this.shell.stderr.on('data', this.onReceiveStdErr);
@@ -93,7 +100,9 @@ class AdbShell {
       throw new Error('Calling exec from already drained shell instance.');
     }
 
-    this.shell.stdin.write(`${command}\r\n`);
+    this.shell.stdin.write(`${command}; echo FLAG_WDFP_EXTRACTOR_DONE\r\n`);
+    console.log(`${command}`);
+    this.result = '';
 
     return new Promise((resolve, reject) => {
       this.execResolver = resolve;
@@ -103,21 +112,19 @@ class AdbShell {
 
   onReceiveStdOut = (data) => {
     const received = data.toString();
-    if (this.execResolver) {
-      if (this.outputDebounce.out) {
-        clearTimeout(this.outputDebounce.out.timeout);
-      }
 
-      this.outputDebounce.out.chunks.push(received);
-      this.outputDebounce.out.timeout = setTimeout(() => {
-        this.execResolver(
-          this.outputDebounce.out.chunks.reduce((acc, cur) => acc + cur, '')
-        );
-        this.execResolver = null;
-        this.execRejector = null;
-        this.outputDebounce.out.chunks = [];
-      }, 100);
+    if (/FLAG_WDFP_EXTRACTOR_DONE/.test(received)) {
+      return this.execResolver?.(
+        `${this.result}${received.replace(
+          /FLAG_WDFP_EXTRACTOR_DONE/,
+          ''
+        )}`.trim()
+      );
     }
+
+    this.result += received;
+
+    return null;
   };
 
   onReceiveStdErr = (data) => {
@@ -148,10 +155,22 @@ class WfExtractor {
 
   ROOT_PATH: string;
 
-  constructor() {
-    this.ROOT_PATH = DEFAULT_ROOT_PATH;
-    this.fileReader = new WfFileReader({ rootDir: this.ROOT_PATH });
+  DEVICE_ID: string;
+
+  ADB_ROOT = false;
+
+  target: 'gl' | 'jp';
+
+  APK_NAME_KEY = {
+    gl: 'wdfp',
+    jp: 'worldflipper',
+  };
+
+  constructor({ target, rootDir } = {}) {
     this.metadata = {};
+
+    this.setRootPath(rootDir || DEFAULT_ROOT_PATH);
+    this.target = target || 'jp';
   }
 
   setRootPath = (rootPath) => {
@@ -165,9 +184,10 @@ class WfExtractor {
       ...update,
     };
 
-    fs.writeFileSync(
+    fs.writeFile(
       METADATA_PATH(this.ROOT_PATH),
-      JSON.stringify(this.metadata)
+      JSON.stringify(this.metadata),
+      () => {}
     );
   };
 
@@ -177,7 +197,6 @@ class WfExtractor {
     try {
       await asyncExec('java -version');
     } catch (err) {
-      console.log(err);
       throw new Error('JAVA_NOT_INSTALLED');
     }
 
@@ -197,32 +216,67 @@ class WfExtractor {
     );
   };
 
-  getDeviceList = async () => {
+  selectDevice = async (deviceId) => {
     logger.log('scanning connected devices.');
-    let foundDevices = await getDeviceList();
 
-    if (!foundDevices.length) {
+    if (deviceId) {
+      this.DEVICE_ID = deviceId;
+    } else {
       await tryConnect();
-      foundDevices = await getDeviceList();
+      const foundDevices = await getDeviceList();
+
+      logger.log(`${foundDevices.length} device(s) found.`);
+
+      if (!foundDevices.length) {
+        throw new Error('DEVICE_NOT_FOUND');
+      }
+      if (foundDevices.length > 1) {
+        throw new Error(`MULTIPLE_DEVICES_FOUND/${foundDevices.join('/')}`);
+      }
+
+      [this.DEVICE_ID] = foundDevices;
     }
 
-    logger.log(`${foundDevices.length} device(s) found.`);
-    return foundDevices;
+    logger.log(`Connected to device ${this.DEVICE_ID}`);
+
+    const adbRootQuery = await asyncExec(
+      `${ADB_PATH} -s ${this.DEVICE_ID} root`
+    );
+
+    if (/cannot run as root/.test(adbRootQuery)) {
+      logger.log('WARNING: Adb connected as non-root permission.');
+      this.ADB_ROOT = false;
+    } else {
+      logger.log('ADB connected as root.');
+      this.ADB_ROOT = true;
+    }
+    return true;
   };
 
   connectAdbShell = async () => {
-    this.adbShell = new AdbShell();
+    this.adbShell = new AdbShell({ deviceId: this.DEVICE_ID });
+
+    if (!this.ADB_ROOT) {
+      try {
+        await this.adbShell.shell.stdin.write('su\r\n');
+      } catch (err) {
+        console.log(err);
+        throw new Error('DEVICE_NOT_ROOTED');
+      }
+    }
 
     logger.log('Adb shell connected.');
   };
 
   indexWfAssets = async () => {
+    let foundWfPath;
+
     try {
-      const foundWfPath = (
+      [foundWfPath] = (
         await this.adbShell.exec(
           'find /data/data -name "*4d576b424178c5b2b253a2dd5aa3d78fa74ef3*"'
         )
-      ).split('/upload')[0];
+      ).split('/upload');
     } catch (err) {
       console.log(err);
 
@@ -251,6 +305,32 @@ class WfExtractor {
     this.files = files;
   };
 
+  adbPull = async (source, target) => {
+    if (this.ADB_ROOT) {
+      return asyncExec(
+        `${ADB_PATH} -s ${this.DEVICE_ID} pull "${source}" "${target}"`
+      );
+    }
+
+    await this.adbShell.exec('mkdir -p /sdcard/wdfpExtract');
+
+    const sourceTargetName = source
+      .split('/')
+      .filter((val) => val)
+      .pop();
+
+    logger.log(`Copying files from ${source} to pullable destination...`);
+
+    await this.adbShell.exec(`cp -a "${source}" "/sdcard/wdfpExtract"`);
+
+    logger.log(`Successfully copied files from ${source} to sdcard.`);
+    logger.log(`Pulling copied files from sdcard to extraction directory...`);
+
+    return asyncExec(
+      `${ADB_PATH} -s ${this.DEVICE_ID} pull "/sdcard/wdfpExtract/${sourceTargetName}" "${target}"`
+    );
+  };
+
   dumpWfAssets = async () => {
     logger.log('Asset dump started.');
 
@@ -263,23 +343,19 @@ class WfExtractor {
 
       logger.log('Extracting deltas...');
 
-      await Promise.all(
-        deltaFiles.map((deltaFile) => {
-          const targetPath = `${this.ROOT_PATH}/dump/${deltaFile.path
-            .replace(this.adbWfPath, '')
-            .split('/')
-            .slice(0, -1)
-            .join('/')}`;
+      for (const deltaFile of deltaFiles) {
+        const targetPath = `${this.ROOT_PATH}/dump/${deltaFile.path
+          .replace(this.adbWfPath, '')
+          .split('/')
+          .slice(0, -1)
+          .join('/')}`;
 
-          if (!DIR_CACHE[targetPath]) {
-            createAndCacheDirectory(targetPath);
-          }
+        if (!DIR_CACHE[targetPath]) {
+          createAndCacheDirectory(targetPath);
+        }
 
-          return asyncExec(
-            `${ADB_PATH} pull "${deltaFile.path}" "${targetPath}/"`
-          );
-        })
-      );
+        await this.adbPull(deltaFile.path, `${targetPath}/`);
+      }
 
       this.deltaFiles = deltaFiles;
 
@@ -288,9 +364,9 @@ class WfExtractor {
       logger.log(
         'WARNING: failed to find metadata, executing full asset dump. this process might take more than several minutes, so please be patience.'
       );
-      await asyncExec(
-        `${ADB_PATH} pull "${this.adbWfPath}" "${this.ROOT_PATH}/dump"`
-      );
+      await new Promise((resolve) => rimraf(`${this.ROOT_PATH}/dump`, resolve));
+      console.log('Existing dump data cleared.');
+      await this.adbPull(this.adbWfPath, `${this.ROOT_PATH}/dump`);
     }
 
     logger.log('Asset dump successful.');
@@ -340,12 +416,17 @@ class WfExtractor {
     const apkExtractionPath = `${this.ROOT_PATH}/apk-extract`;
 
     const packageInfoLine = await this.adbShell.exec(
-      'pm list packages -f | grep wdfp'
+      `pm list packages -f | grep ${this.APK_NAME_KEY[this.target]}`
     );
+
     const packageName = packageInfoLine
       .split('=')
       .slice(-1)[0]
       .replace(/[\r]{0,}\n/, '');
+
+    if (!packageInfoLine || !packageName) {
+      throw new Error('APK_NOT_FOUND');
+    }
 
     const packageVersion = (
       await this.adbShell.exec(
@@ -373,7 +454,9 @@ class WfExtractor {
         .join('=')
         .replace('package:', '');
 
-      await asyncExec(`${ADB_PATH} pull "${savedApkPath}" "${apkPath}"`);
+      await asyncExec(
+        `${ADB_PATH} -s ${this.DEVICE_ID} pull "${savedApkPath}" "${apkPath}"`
+      );
 
       new AdmZip(`${this.ROOT_PATH}/apk.apk`).extractAllTo(apkExtractionPath);
       logger.log(`APK extracted and saved to ${apkPath}`);
@@ -453,8 +536,10 @@ class WfExtractor {
     logger.log('Successfully extracted orderedMaps.');
   };
 
-  extractImageAssets = async () => {
-    logger.log('Start extracting character image assets...');
+  characterListCache = null;
+
+  getCharacterList = async () => {
+    if (this.characterListCache) return this.characterListCache;
 
     let characters = Object.values(
       JSON.parse(
@@ -480,6 +565,16 @@ class WfExtractor {
 
     characters = [...new Set(characters)];
 
+    this.characterListCache = characters;
+
+    return characters;
+  };
+
+  extractImageAssets = async () => {
+    logger.log('Start extracting character image assets...');
+
+    const characters = await this.getCharacterList();
+
     const characterImageDigests = [
       ...new Set(
         characters
@@ -503,19 +598,214 @@ class WfExtractor {
 
     const characterImagePaths = [];
 
+    let count = 0;
+    logger.data({
+      type: 'progressStart',
+      data: {
+        id: 'Generating digests for possible assets...',
+        max: characterImageDigests.length,
+      },
+    });
     for (const [fileName, digest] of characterImageDigests) {
+      count += 1;
+      logger.data({
+        type: 'progress',
+        data: {
+          id: 'Generating digests for possible assets...',
+          progress: count,
+        },
+      });
       const filePath = await this.fileReader.checkDigestPath(digest);
         if (!filePath) continue; // eslint-disable-line
       characterImagePaths.push([fileName, filePath]);
     }
+    logger.data({
+      type: 'progressEnd',
+      data: {
+        id: 'Generating digests for possible assets...',
+      },
+    });
 
-    const characterImageFiles = characterImagePaths.filter((v) => v);
-
-    for (const [fileName, filePath] of characterImageFiles) {
+    count = 0;
+    logger.data({
+      type: 'progressStart',
+      data: {
+        id: 'Exporting character image assets...',
+        max: characterImagePaths.length,
+      },
+    });
+    for (const [fileName, filePath] of characterImagePaths) {
+      count += 1;
+      logger.data({
+        type: 'progress',
+        data: {
+          id: 'Exporting character image assets...',
+          progress: count,
+        },
+      });
       await this.fileReader.readPngAndGenerateOutput(filePath, fileName);
     }
+    logger.data({
+      type: 'progressEnd',
+      data: {
+        id: 'Exporting character image assets...',
+      },
+    });
+    logger.log('Exporting sprite atlases & frames...');
 
     logger.log('Successfully extracted character image assets.');
+  };
+
+  extractCharacterSpriteMetaDatas = async () => {
+    const characters = await this.getCharacterList();
+
+    const characterAmfDigests = characters
+      .map((character) =>
+        CHARACTER_AMF_PRESERTS.map((preset) => preset(character))
+      )
+      .reduce((acc, fileNameArrays) => [...acc, ...fileNameArrays], [])
+      .map((file) => [`${file}`, digestWfFileName(`${file}`)]);
+
+    const characterAmfPaths = [];
+
+    for (const [fileName, digest] of characterAmfDigests) {
+      const filePath = await this.fileReader.checkDigestPath(digest);
+        if (!filePath) continue; // eslint-disable-line
+      characterAmfPaths.push([fileName, filePath]);
+    }
+
+    let count = 0;
+    logger.data({
+      type: 'progressStart',
+      data: {
+        id: 'Exporting sprite atlases...',
+        max: characterAmfPaths.length,
+      },
+    });
+    for (const [fileName, filePath] of characterAmfPaths) {
+      count += 1;
+      logger.data({
+        type: 'progress',
+        data: {
+          id: 'Exporting sprite atlases...',
+          progress: count,
+        },
+      });
+      await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
+    }
+    logger.data({
+      type: 'progressEnd',
+      data: {
+        id: 'Exporting sprite atlases...',
+      },
+    });
+  };
+
+  generateAnimatedSprites = async () => {
+    logger.log('Cropping character sprites & generating animated GIFs...');
+    const characters = await this.getCharacterList();
+
+    logger.data({
+      type: 'progressStart',
+      data: {
+        id: 'Processing Character Sprites...',
+        max: characters.length,
+      },
+    });
+
+    let count = 0;
+
+    for (const character of characters) {
+      count += 1;
+      try {
+        if (!this.metadata.spriteProcessedLock?.includes(character)) {
+          const spriteImage = await asyncReadFile(
+            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/sprite_sheet.png`
+          );
+          const spriteAtlases = JSON.parse(
+            (
+              await asyncReadFile(
+                `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/sprite_sheet.atlas.json`
+              )
+            ).toString()
+          );
+          const timeline = JSON.parse(
+            (
+              await asyncReadFile(
+                `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/pixelart.timeline.json`
+              )
+            ).toString()
+          );
+          const { begin, end } = timeline.sequences.find(
+            (sequence) => sequence.name === 'walk_front'
+          );
+          await this.fileReader.cropSpritesFromAtlas({
+            sprite: spriteImage,
+            atlases: spriteAtlases,
+            destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/sprite_sheet`,
+            generateGif: {
+              begin,
+              end,
+              dest: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/walk_front.gif`,
+              delay: 150,
+            },
+          });
+          await this.markMetaData({
+            spriteProcessedLock: [
+              ...(this.metadata.spriteProcessedLock || []),
+              character,
+            ],
+          });
+        }
+
+        if (!this.metadata.specialSpriteProcessedLock?.includes(character)) {
+          const specialImage = await asyncReadFile(
+            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet.png`
+          );
+          const specialAtlases = JSON.parse(
+            (
+              await asyncReadFile(
+                `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet.atlas.json`
+              )
+            ).toString()
+          );
+          await this.fileReader.cropSpritesFromAtlas({
+            sprite: specialImage,
+            atlases: specialAtlases,
+            destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet`,
+            generateGif: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special.gif`,
+          });
+
+          await this.markMetaData({
+            specialSpriteProcessedLock: [
+              ...(this.metadata.specialSpriteProcessedLock || []),
+              character,
+            ],
+          });
+        }
+      } catch (err) {
+        if (character === 'emilia') {
+          console.log(err);
+        }
+        continue;
+      } finally {
+        logger.data({
+          type: 'progress',
+          data: {
+            id: 'Processing Character Sprites...',
+            progress: count,
+          },
+        });
+      }
+    }
+
+    logger.data({
+      type: 'progressEnd',
+      data: {
+        id: 'Processing Character Sprites...',
+      },
+    });
+    logger.log('Successfully cropped and saved all character sprites.');
   };
 
   close = async () => {

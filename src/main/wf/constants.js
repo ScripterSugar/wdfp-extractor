@@ -43,5 +43,18 @@ export const CHARACTER_SPRITE_PRESETS = [
     `character/${character}/ui/full_shot_illustration_setting_${index}`,
 ];
 
+export const CHARACTER_AMF_PRESERTS = [
+  (character) => `character/${character}/pixelart/pixelart.frame.amf3.deflate`,
+  (character) =>
+    `character/${character}/pixelart/pixelart.timeline.amf3.deflate`,
+  (character) => `character/${character}/pixelart/special.frame.amf3.deflate`,
+  (character) =>
+    `character/${character}/pixelart/special.timeline.amf3.deflate`,
+  (character) =>
+    `character/${character}/pixelart/special_sprite_sheet.atlas.amf3.deflate`,
+  (character) =>
+    `character/${character}/pixelart/sprite_sheet.atlas.amf3.deflate`,
+];
+
 export const NOX_PORT_LIST = [62001, 62025];
 export const DATEFORMAT_A = 'YYYY-MM-DD HH:mm';

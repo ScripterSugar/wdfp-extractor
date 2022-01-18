@@ -8,8 +8,8 @@ contextBridge.exposeInMainWorld('electron', {
     openDirectory(dir) {
       ipcRenderer.send('openDirectory', dir);
     },
-    startExtraction(rootDir) {
-      ipcRenderer.send('startExtraction', rootDir);
+    startExtraction(rootDir, options) {
+      ipcRenderer.send('startExtraction', rootDir, options);
     },
     openExternal(external) {
       shell.openExternal(external);

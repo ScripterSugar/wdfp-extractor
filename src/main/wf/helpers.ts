@@ -18,10 +18,15 @@ export const asyncRename = (...args) =>
     fs.rename(...args, (err, data) => (err ? reject(err) : resolve(data)))
   );
 
-export const asyncExec = async (command: string): Promise<string> =>
-  new Promise((resolve, reject) =>
-    exec(command, (err, stdout) => (err ? reject(err) : resolve(stdout)))
+export const asyncExec = async (command: string): Promise<string> => {
+  console.log(command);
+  return new Promise((resolve, reject) =>
+    exec(command, (err, stdout) => {
+      console.log('EXEC', err, stdout);
+      return err ? reject(err) : resolve(stdout);
+    })
   );
+};
 
 export const sleep = (timeout) =>
   new Promise((resolve) => setTimeout(resolve, timeout));
@@ -53,13 +58,6 @@ export const spawnCommand = (command, args, { wait }) => {
   child.stdout.pipe(process.stdout);
 
   return { process: child, awaiter: new Promise() };
-};
-
-const DIR_CACHE = {};
-
-export const createAndCacheDirectory = async (dir) => {
-  await asyncMkdir(dir, { recursive: true });
-  DIR_CACHE[dir] = true;
 };
 
 export const refineLs = (lsResult): Array<LSResult> => {

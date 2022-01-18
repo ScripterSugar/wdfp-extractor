@@ -3,7 +3,7 @@ const zlib = require('zlib');
 
 const readOrderedMap = (mapping) => {
   try {
-    const readHeaderSize = buffer => buffer.readInt32LE(0);
+    const readHeaderSize = (buffer) => buffer.readInt32LE(0);
 
     const headerSize = readHeaderSize(mapping);
 
@@ -12,14 +12,21 @@ const readOrderedMap = (mapping) => {
 
     const readHeaderData = (headerDataBuffer) => {
       const entriesCount = headerDataBuffer.readInt32LE(0);
-      const entryOffsetsBuffer = headerDataBuffer.slice(4, entriesCount * 8 + 4);
+      const entryOffsetsBuffer = headerDataBuffer.slice(
+        4,
+        entriesCount * 8 + 4
+      );
 
-      const entryOffsets = new Array(entriesCount).fill().map((_, entryIndex) => {
-        const keyEndOffset = entryOffsetsBuffer.readInt32LE(entryIndex * 8);
-        const dataEndOffset = entryOffsetsBuffer.readInt32LE(entryIndex * 8 + 4);
+      const entryOffsets = new Array(entriesCount)
+        .fill()
+        .map((_, entryIndex) => {
+          const keyEndOffset = entryOffsetsBuffer.readInt32LE(entryIndex * 8);
+          const dataEndOffset = entryOffsetsBuffer.readInt32LE(
+            entryIndex * 8 + 4
+          );
 
-        return [keyEndOffset, dataEndOffset];
-      });
+          return [keyEndOffset, dataEndOffset];
+        });
 
       let currentKeyOffset = 0;
       const keysBuffer = headerDataBuffer.slice(entriesCount * 8 + 4);
@@ -64,7 +71,13 @@ const readOrderedMap = (mapping) => {
 
     const values = readContentData(contentSection, entryOffsets);
 
-    return keys.reduce((acc, key, index) => ({ ...acc, [key]: values[index]?.split?.(',') || values[index] }), {});
+    return keys.reduce(
+      (acc, key, index) => ({
+        ...acc,
+        [key]: values[index]?.split?.(',') || values[index],
+      }),
+      {}
+    );
   } catch (err) {
     console.log('FAILED READING FILE DATA');
     console.log(err);

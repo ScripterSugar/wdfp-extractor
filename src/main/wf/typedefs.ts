@@ -13,4 +13,6 @@ export type WFExtractorMetaData = {
   lastExtractionDate: string;
   lastPackageVersion: string;
   lastSwfChecksum: string;
+  spriteProcessedLock: string[];
+  specialSpriteProcessedLock: string[];
 };

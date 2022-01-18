@@ -68,74 +68,87 @@ ipcMain.on('extractionResponseRenderer', async (event, response) => {
   extractionProcessor.resolveAwait(response);
 });
 
-ipcMain.on('startExtraction', async (event, rootDir) => {
-  let replyPacket;
-  let extractionPhase = 0;
+ipcMain.on(
+  'startExtraction',
+  async (
+    event,
+    rootDir,
+    { region, extractMaster, extractImage, processAtlas }
+  ) => {
+    let replyPacket;
+    let extractionPhase = 0;
 
-  const wfExtractor = new WfExtractor();
+    const wfExtractor = new WfExtractor({ region, rootDir });
 
-  wfExtractor.setRootPath(rootDir);
+    while (replyPacket !== 'done') {
+      console.log(`TRYING EXTRACTION, Current Phase ${extractionPhase}`);
+      try {
+        if (extractionPhase <= 0) {
+          await wfExtractor.init();
+          extractionPhase = 1;
+        }
 
-  while (replyPacket !== 'done') {
-    console.log(`TRYING EXTRACTION, Current Phase ${extractionPhase}`);
-    try {
-      if (extractionPhase <= 0) {
-        await wfExtractor.init();
-        extractionPhase = 1;
-      }
+        if (extractionPhase <= 1) {
+          if (/selectDevice/.test(replyPacket)) {
+            const deviceId = replyPacket.replace(/selectDevice/, '');
+            await wfExtractor.selectDevice(deviceId);
+          } else {
+            await wfExtractor.selectDevice();
+          }
 
-      if (extractionPhase <= 1) {
-        const deviceList = await wfExtractor.getDeviceList();
-
-        if (!deviceList.length) {
-          event.reply('extractionResponseMain', { error: 'DEVICE_NOT_FOUND' });
-          replyPacket = await extractionProcessor.awaitNextPacket();
-          continue;
-        } else {
           extractionPhase = 2;
         }
+
+        if (extractionPhase <= 2) {
+          await wfExtractor.connectAdbShell();
+          extractionPhase = 3;
+        }
+
+        if (extractionPhase <= 3) {
+          await wfExtractor.dumpAndExtractApk();
+          extractionPhase = 4;
+        }
+
+        if (extractionPhase <= 4) {
+          await wfExtractor.indexWfAssets();
+          await wfExtractor.dumpWfAssets();
+          await wfExtractor.mergeAssets();
+          extractionPhase = 5;
+        }
+
+        if (extractionPhase <= 5) {
+          if (extractMaster) {
+            await wfExtractor.extractMasterTable();
+          }
+          extractionPhase = 6;
+        }
+
+        if (extractionPhase <= 6) {
+          if (extractImage) {
+            await wfExtractor.extractImageAssets();
+
+            if (processAtlas) {
+              await wfExtractor.extractCharacterSpriteMetaDatas();
+              await wfExtractor.generateAnimatedSprites();
+            }
+          }
+          extractionPhase = 7;
+        }
+
+        break;
+      } catch (err) {
+        logger.log(`Error ocurred while extraction: ${err?.message || err}`);
+
+        event.reply('extractionResponseMain', {
+          error: err?.message || 'UNKNOWN',
+        });
+        replyPacket = await extractionProcessor.awaitNextPacket();
       }
-
-      if (extractionPhase <= 2) {
-        await wfExtractor.connectAdbShell();
-        extractionPhase = 3;
-      }
-
-      if (extractionPhase <= 3) {
-        await wfExtractor.dumpAndExtractApk();
-        extractionPhase = 4;
-      }
-
-      if (extractionPhase <= 4) {
-        await wfExtractor.indexWfAssets();
-        await wfExtractor.dumpWfAssets();
-        await wfExtractor.mergeAssets();
-        extractionPhase = 5;
-      }
-
-      if (extractionPhase <= 5) {
-        await wfExtractor.extractMasterTable();
-        extractionPhase = 6;
-      }
-
-      if (extractionPhase <= 6) {
-        await wfExtractor.extractImageAssets();
-        extractionPhase = 7;
-      }
-
-      break;
-    } catch (err) {
-      logger.log(`Error ocurred while extraction: ${err?.message || err}`);
-
-      event.reply('extractionResponseMain', {
-        error: err?.message || 'UNKNOWN',
-      });
-      replyPacket = await extractionProcessor.awaitNextPacket();
     }
-  }
 
-  event.reply('extractionResponseMain', { success: true });
-});
+    event.reply('extractionResponseMain', { success: true });
+  }
+);
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
