@@ -209,6 +209,8 @@ const AppContent = () => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionError, setExtractionError] = useState(null);
   const [appVersion, setAppVersion] = useState('UNKNOWN');
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const handleDataLogRef = useRef();
   const [devConsoleLogs, setDevConsoleLogs, devConsoleLogsRef] = useStateRef(
     []
@@ -443,7 +445,19 @@ const AppContent = () => {
 
       setAppVersion(await ipcReturn);
     })();
+
+    window.electron.ipcRenderer.on('update_available', () => {
+      setUpdateAvailable(true);
+    });
+
+    window.electron.ipcRenderer.on('update_downloaded', () => {
+      setUpdateDownloaded(true);
+    });
   }, []); // eslint-disable-line
+
+  const restartAndUpdate = () => {
+    window.electron.ipcRenderer.updateApp();
+  };
 
   return (
     <div
@@ -558,6 +572,9 @@ const AppContent = () => {
         >
           V.{appVersion}
         </Typography>
+        {(updateAvailable && <Typography>Update Available</Typography>) || (
+          <Typography>No updates available</Typography>
+        )}
         <br />
         Created by | INASOM#3195
         <br />

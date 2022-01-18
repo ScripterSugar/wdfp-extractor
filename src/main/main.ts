@@ -19,14 +19,6 @@ import { resolveHtmlPath } from './util';
 import logger from './wf/logger';
 import WfExtractor from './wf';
 
-export default class AppUpdater {
-  constructor() {
-    log.transports.file.level = 'info';
-    autoUpdater.logger = log;
-    autoUpdater.checkForUpdatesAndNotify();
-  }
-}
-
 let mainWindow: BrowserWindow | null = null;
 
 ipcMain.on('showOpenDialog', async (event, arg) => {
@@ -43,6 +35,9 @@ ipcMain.on('getAppVersion', async (event) => {
 
 ipcMain.on('openDirectory', async (event, openPath) => {
   shell.openPath(openPath);
+});
+ipcMain.on('updateApp', async (event, openPath) => {
+  autoUpdater.quitAndInstall();
 });
 
 class ExtractionProcessor {
@@ -214,14 +209,12 @@ const createWindow = async () => {
     } else {
       mainWindow.show();
     }
+    autoUpdater.checkForUpdatesAndNotify();
   });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
-
-  // eslint-disable-next-line
-  new AppUpdater();
 };
 
 /**
@@ -247,3 +240,10 @@ app
     });
   })
   .catch(console.log);
+
+autoUpdater.on('update-available', () => {
+  mainWindow.webContents.send('update_available');
+});
+autoUpdater.on('update-downloaded', () => {
+  mainWindow.webContents.send('update_downloaded');
+});

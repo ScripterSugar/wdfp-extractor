@@ -170,7 +170,7 @@ class WfExtractor {
     this.metadata = {};
 
     this.setRootPath(rootDir || DEFAULT_ROOT_PATH);
-    logger.log(`Target region setted as ${region}`);
+    logger.log(`Target region set as ${region}`);
     this.region = region || 'jp';
   }
 
