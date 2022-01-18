@@ -38,6 +38,7 @@ if you're willing to extract assets from real device, your device must be rooted
 - Support extraction of ability texts
 - Support extraction of miscellaneous image assets
 - Support extraction of voice files
+- Data viewer
 
 ## Recommended environments
 
