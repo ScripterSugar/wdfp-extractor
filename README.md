@@ -24,20 +24,22 @@ if you're willing to extract assets from real device, your device must be rooted
 
 ## Recommended environments
 
-The tool only tested for limited use cases, thus might have various bugs / crahses among other enviornments, and it basically works best with ADB running as root.
+The tool only tested for limited use cases, thus might have various bugs / crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission.
 
 ### Emulator
 
-Nox emulator
+Nox player (version 7.0.x)
 
 ### Real device
 
-Pixel 2, Pixel 4 XL
+Pixel 2 (Android 11), Pixel 4 XL (Android 12)
 
 
-## Contribution
+## Contributing
 
-I won't actively manage this repository as far as it works for me, so if you're having trouble using the tool on your side, in most cases you'll have to fix the problem yourself. You can still issue the tickets, but do not expect me to fix it. Please feel free to open any PR.
+I won't actively manage this repository as far as it works for me, so if you're having trouble using the tool on your side, in most cases you'll have to fix the problem yourself. You can still issue the tickets, but do not expect me to actively fix it. Please feel free to open any PR.
+
+The application built from the [electron-react-boilerplate](https://github.com/electron-react-boilerplate/electron-react-boilerplate). Refer to the repository to check how to install dependencies and start development on your local machine.
 
 
 
