@@ -24,7 +24,7 @@ if you're willing to extract assets from real device, your device must be rooted
 
 ## Recommended environments
 
-The tool only tested for limited use cases, thus might have various bugs / crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission.
+The tool only tested for limited use cases, thus might has various bugs / crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission.
 
 ### Emulator
 
