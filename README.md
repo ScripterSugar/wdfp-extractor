@@ -4,8 +4,9 @@
 
 #### DISCLAIMER: All the rights of extracted assets belong to cygames/citail. I do not encourage you to use any of extracted assets in inappropriate purpose. If you use any assets extracted by this tool, you do so at your sole risk.
 
-
-![theoSpecial](https://user-images.githubusercontent.com/19164553/150029824-aace84ff-766d-4555-ba72-794d610761b5.gif)
+<p align="center">
+ <img src="https://user-images.githubusercontent.com/19164553/150029824-aace84ff-766d-4555-ba72-794d610761b5.gif" alt="theoSpecial" />
+</p>
 
 Asset Extraction tool for World Flipper.
 
