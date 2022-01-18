@@ -26,6 +26,18 @@ Requires [Java 8 or later](https://www.java.com/en/download/) to run FFDEC.
 
 if you're willing to extract assets from real device, your device must be rooted.
 
+## Recommended environments
+
+The tool only tested for limited use cases, thus might has various bugs / crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission.
+
+### Emulator
+
+Nox player (version 7.0.x)
+
+### Real device
+
+Pixel 2 (Android 11), Pixel 4 XL (Android 12)
+
 ## Supported Assets
 - APK
 - Decompiled SWF
@@ -40,19 +52,6 @@ if you're willing to extract assets from real device, your device must be rooted
 - Support extraction of miscellaneous image assets
 - Support extraction of voice files
 - Data viewer
-
-## Recommended environments
-
-The tool only tested for limited use cases, thus might has various bugs / crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission.
-
-### Emulator
-
-Nox player (version 7.0.x)
-
-### Real device
-
-Pixel 2 (Android 11), Pixel 4 XL (Android 12)
-
 
 ## Contributing
 
