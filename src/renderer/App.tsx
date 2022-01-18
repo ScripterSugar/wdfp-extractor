@@ -6,7 +6,8 @@ import extractIcon from '../../assets/extract.svg';
 import viewerIcon from '../../assets/viewer.svg';
 import folderIcon from '../../assets/folder.svg';
 import theoSpin from '../../assets/theospin.png';
-import discord from '../../assets/discord.png';
+import theoSpecial from '../../assets/theoSpecial.gif';
+import discord from '../../assets/discord.svg';
 import infoIcon from '../../assets/info.svg';
 import theoWalk from '../../assets/theoWalk.gif';
 import arrowLeftIcon from '../../assets/arrowLeft.svg';
@@ -498,7 +499,10 @@ const AppContent = () => {
             <img src={infoIcon} alt="info" width={24} />
             Information
           </WfButton>
-          <WfDangerButton style={{ justifyContent: 'center' }}>
+          <WfDangerButton
+            onClick={window.close}
+            style={{ justifyContent: 'center' }}
+          >
             Close App
           </WfDangerButton>
         </WfCard>
@@ -538,6 +542,11 @@ const AppContent = () => {
         )}
       </AppMainLayout>
       <Modal open={openInfoModal} onClose={() => setOpenInfoModal(false)}>
+        <img
+          src={theoSpecial}
+          alt="theo"
+          style={{ width: '100%', marginBottom: 16 }}
+        />
         <Typography>World Flipper Data Extractor</Typography>
         <br />
         <Typography
@@ -548,13 +557,6 @@ const AppContent = () => {
           }}
         >
           V.{appVersion}
-          <SpinImg
-            animation="ease-in"
-            src={theoSpin}
-            alt="info"
-            width={24}
-            style={{ marginLeft: 8 }}
-          />
         </Typography>
         <br />
         Created by | INASOM#3195
