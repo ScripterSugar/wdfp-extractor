@@ -174,6 +174,10 @@ class WfExtractor {
     this.region = region || 'jp';
   }
 
+  dev = async () => {
+    this.fileReader.buildDigestFileMap();
+  };
+
   setRootPath = (rootPath) => {
     this.ROOT_PATH = rootPath;
     this.fileReader = new WfFileReader({ rootDir: this.ROOT_PATH });
@@ -334,6 +338,7 @@ class WfExtractor {
 
   dumpWfAssets = async () => {
     logger.log('Asset dump started.');
+    let isChanged;
 
     const { lastExtractionDate } = this.metadata;
 
@@ -360,11 +365,16 @@ class WfExtractor {
 
       this.deltaFiles = deltaFiles;
 
+      if (deltaFiles.length) {
+        isChanged = true;
+      }
+
       logger.log(`${deltaFiles.length} files newly extracted and saved.`);
     } else {
       logger.log(
         'WARNING: failed to find metadata, executing full asset dump. this process might take more than several minutes, so please be patience.'
       );
+      isChanged = true;
       await new Promise((resolve) => rimraf(`${this.ROOT_PATH}/dump`, resolve));
       console.log('Existing dump data cleared.');
       await this.adbPull(this.adbWfPath, `${this.ROOT_PATH}/dump`);
@@ -372,12 +382,24 @@ class WfExtractor {
 
     logger.log('Asset dump successful.');
 
-    this.markMetaData(
-      {
-        lastExtractionDate: moment().format(DATEFORMAT_A),
-      },
-      this.ROOT_PATH
-    );
+    this.markMetaData({
+      lastExtractionDate: moment().format(DATEFORMAT_A),
+      ...(isChanged && { lockedHashMap: false }),
+    });
+  };
+
+  buildDigestFileMap = async () => {
+    if (this.metadata.lockedHashMap) {
+      logger.log(`Loading saved hashmap.`);
+      await this.fileReader.loadSavedDigestFileMap();
+    } else {
+      logger.log(`Building asset digest hash map...`);
+      await this.fileReader.buildDigestFileMap();
+      logger.log(`Successfully built asset digest hash map.`);
+      this.markMetaData({
+        lockedHashMap: true,
+      });
+    }
   };
 
   mergeAssets = async () => {

@@ -5,7 +5,35 @@ class Logger {
 
   constructor({ window }: { window: electron.BrowserWindow }) {
     this.window = window;
+    this.absCount = 0;
   }
+
+  setThrottle = () => {
+    if (this.throttleTimeout) {
+      clearTimeout(this.throttleTimeout);
+    }
+    this.throttle = true;
+
+    this.throttleTimeout = setTimeout(() => {
+      this.throttle = false;
+    }, 100);
+  };
+
+  isThrottled = (targetCount) => {
+    this.absCount += 1;
+
+    if (this.absCount >= (targetCount || 500)) {
+      this.absCount = 0;
+      this.setThrottle();
+      return false;
+    }
+
+    if (this.throttle) return true;
+
+    this.setThrottle();
+
+    return false;
+  };
 
   log = (...args) => {
     console.log(...args);
@@ -15,7 +43,10 @@ class Logger {
     }
   };
 
-  data = (serializable) => {
+  data = (serializable, { maxThrottled } = { maxThrottled: 500 }) => {
+    if (serializable.type === 'progress') {
+      if (this.isThrottled(maxThrottled)) return;
+    }
     if (this.window) {
       this.window.webContents.send(
         'ipc-logger-log',

@@ -108,6 +108,12 @@ ipcMain.on(
           await wfExtractor.indexWfAssets();
           await wfExtractor.dumpWfAssets();
           await wfExtractor.mergeAssets();
+          extractionPhase = 4.5;
+        }
+
+        if (extractionPhase <= 4.5) {
+          await wfExtractor.buildDigestFileMap();
+
           extractionPhase = 5;
         }
 

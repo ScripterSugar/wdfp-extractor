@@ -15,4 +15,5 @@ export type WFExtractorMetaData = {
   lastSwfChecksum: string;
   spriteProcessedLock: string[];
   specialSpriteProcessedLock: string[];
+  lockedHashMap: boolean;
 };

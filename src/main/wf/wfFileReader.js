@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { readdir, mkdir, readFile, writeFile, copyFile } from 'fs/promises';
 import zlib from 'zlib';
 import amfjs from 'amfjs';
 import { Readable } from 'stream';
@@ -22,19 +23,6 @@ function bufferToStream(binary) {
   return readableInstanceStream;
 }
 
-const asyncExist = async (path) =>
-  new Promise((resolve) => fs.exists(path, resolve));
-const asyncMkdir = (...args) =>
-  new Promise((resolve) => fs.mkdir(...args, resolve));
-const asyncReadFile = async (path) =>
-  new Promise((resolve, reject) =>
-    fs.readFile(path, (err, data) => (err ? reject(err) : resolve(data)))
-  );
-const asyncWriteFile = (...args) =>
-  new Promise((resolve) => fs.writeFile(...args, resolve));
-const asyncCopyFile = (...args) =>
-  new Promise((resolve) => fs.copyFile(...args, resolve));
-
 const asyncInflateRaw = (buffer) =>
   new Promise((resolve, reject) =>
     zlib.inflateRaw(buffer, (err, res) => (err ? reject(err) : resolve(res)))
@@ -43,17 +31,20 @@ const asyncInflateRaw = (buffer) =>
 const copyFileRecursive = async (filePath, destPath) => {
   const dirs = destPath.split('/').slice(0, -1).join('/');
 
-  await asyncMkdir(dirs, { recursive: true });
+  await mkdir(dirs, { recursive: true });
 
-  return asyncCopyFile(filePath, destPath);
+  return copyFile(filePath, destPath);
 };
 
 const writeFileRecursive = async (destPath, fileData) => {
   const dirs = destPath.split('/').slice(0, -1).join('/');
 
-  await asyncMkdir(dirs, { recursive: true });
+  (async () => {
+    await mkdir(dirs, { recursive: true });
 
-  return asyncWriteFile(destPath, fileData);
+    writeFile(destPath, fileData);
+  })();
+  return true;
 };
 
 export default class WfFileReader {
@@ -61,22 +52,85 @@ export default class WfFileReader {
     this._rootDir = rootDir;
   }
 
+  loadSavedDigestFileMap = async () => {
+    const openedFile = await readFile(`${this._rootDir}/digestFileMap.lock`);
+    this.digestFileMap = JSON.parse(openedFile.toString());
+
+    return this.digestFileMap;
+  };
+
+  buildDigestFileMap = async () => {
+    this.digestFileMap = {};
+
+    const targetDirectories = [];
+    let totalCount = 0;
+
+    for (const pathPrefix of ELIGIBLE_PATH_PREFIXES) {
+      const dirPath = `${this._rootDir}/${pathPrefix}`;
+
+      const subDirs = await readdir(dirPath);
+
+      targetDirectories.push({
+        dirPath,
+        subDirs,
+      });
+
+      totalCount += subDirs.length;
+    }
+
+    logger.data({
+      type: 'progressStart',
+      data: {
+        id: 'Building hash map...',
+        max: totalCount,
+      },
+    });
+    let count = 0;
+
+    for (const { dirPath, subDirs } of targetDirectories) {
+      for (const subDir of subDirs) {
+        logger.data(
+          {
+            type: 'progress',
+            data: {
+              id: 'Building hash map...',
+              progress: (count += 1),
+            },
+          },
+          { maxThrottled: 12 }
+        );
+        const files = await readdir(`${dirPath}/${subDir}`);
+
+        files.forEach((file) => {
+          const hashFile = {
+            filePath: `${dirPath}/${subDir}/${file}`,
+          };
+          this.digestFileMap[`${subDir}${file}`] = hashFile;
+        });
+      }
+    }
+    logger.data({
+      type: 'progressEnd',
+      data: {
+        id: 'Building hash map...',
+      },
+    });
+
+    await writeFile(
+      `${this._rootDir}/digestFileMap.lock`,
+      JSON.stringify(this.digestFileMap)
+    );
+  };
+
   checkDigestPath = async (
     digest,
     { rootDir = this._rootDir, skipCheck } = {}
   ) => {
-    const dir = digest.slice(0, 2);
-    const fileName = digest.slice(2);
-
-    for (const pathPrefix of ELIGIBLE_PATH_PREFIXES) {
-      const filePath = `${rootDir}/${pathPrefix}${dir}/${fileName}`;
-
-      if (skipCheck || (await asyncExist(filePath))) {
-        return filePath;
-      }
+    if (!this.digestFileMap) {
+      throw new Error('UNDEFINED_DIGEST_MAP');
     }
 
-    return null;
+    return this.digestFileMap[digest]?.filePath;
   };
 
   readGeneralAndCreateOutput = async (
@@ -84,7 +138,7 @@ export default class WfFileReader {
     originSavePath,
     { rootDir = this._rootDir } = {}
   ) => {
-    const openedFile = await asyncReadFile(filePath);
+    const openedFile = await readFile(filePath);
 
     let fileContent = await asyncInflateRaw(openedFile);
 
@@ -267,9 +321,9 @@ export default class WfFileReader {
 
         if (!isDuplicated) {
           console.log(`Savgin ${saveName}`);
-          await asyncMkdir(destPath, { recursive: true });
+          await mkdir(destPath, { recursive: true });
 
-          await asyncWriteFile(path.join(destPath, saveName), imageBuffer);
+          await writeFile(path.join(destPath, saveName), imageBuffer);
         }
 
         return {
@@ -302,7 +356,7 @@ export default class WfFileReader {
     { rootDir = this._rootDir } = {}
   ) => {
     logger.devLog(`Reading file ${filePath}...`);
-    const openedFile = await asyncReadFile(filePath);
+    const openedFile = await readFile(filePath);
 
     const [, byte1, byte2, byte3] = openedFile;
 
@@ -363,40 +417,39 @@ export default class WfFileReader {
           progress: count,
         },
       });
-      for (const pathPrefix of ELIGIBLE_PATH_PREFIXES) {
-        const filePath = `${rootDir}/${pathPrefix}${dir}/${fileName}`;
+      const digest = `${dir}/${fileName}`;
 
-        if (await asyncExist(filePath)) {
-          logger.devLog(`Found ${filePath}`);
-          const originFileName =
-            digestedPathsOriginFileNameMap[`${dir}${fileName}`];
-          const fileRootName = `${rootDir}/output/orderedmap/${originFileName
-            .split('/')
-            .filter((val) => val)
-            .join('/')}`;
-          const orederedMapFilePath = `${fileRootName}.orderedmap`;
-          await copyFileRecursive(filePath, orederedMapFilePath);
-          const orderedMapDataJson = openAndReadOrderedMap(orederedMapFilePath);
-          const stringifiedJson = JSON.stringify(
-            orderedMapDataJson,
-            (k, v) => {
-              if (v instanceof Array) return JSON.stringify(v);
-              return v;
-            },
-            4
-          )
-            .replace(/"\[/g, '[')
-            .replace(/\]"/g, ']')
-            .replace(/\[\\"/g, '["')
-            .replace(/\\"\]/g, '"]')
-            .replace(/\\",\\"/g, '","');
-          const jsonFilePath = `${fileRootName}.json`;
-          logger.devLog(`Exporting orderedmap to JSON ${jsonFilePath}`);
-          await writeFileRecursive(jsonFilePath, stringifiedJson);
+      const filePath = await this.checkDigestPath(digest);
 
-          masterTableFiles.push([jsonFilePath, `${dir}${fileName}`]);
-        }
-      }
+      if (!filePath) continue;
+      logger.devLog(`Found ${digest}`);
+      const originFileName =
+        digestedPathsOriginFileNameMap[`${dir}${fileName}`];
+      const fileRootName = `${rootDir}/output/orderedmap/${originFileName
+        .split('/')
+        .filter((val) => val)
+        .join('/')}`;
+      const orederedMapFilePath = `${fileRootName}.orderedmap`;
+      await copyFileRecursive(filePath, orederedMapFilePath);
+      const orderedMapDataJson = openAndReadOrderedMap(orederedMapFilePath);
+      const stringifiedJson = JSON.stringify(
+        orderedMapDataJson,
+        (k, v) => {
+          if (v instanceof Array) return JSON.stringify(v);
+          return v;
+        },
+        4
+      )
+        .replace(/"\[/g, '[')
+        .replace(/\]"/g, ']')
+        .replace(/\[\\"/g, '["')
+        .replace(/\\"\]/g, '"]')
+        .replace(/\\",\\"/g, '","');
+      const jsonFilePath = `${fileRootName}.json`;
+      logger.devLog(`Exporting orderedmap to JSON ${jsonFilePath}`);
+      await writeFileRecursive(jsonFilePath, stringifiedJson);
+
+      masterTableFiles.push([jsonFilePath, `${dir}${fileName}`]);
     }
 
     logger.data({
