@@ -31,12 +31,10 @@ if you're willing to extract assets from real device, your device must be rooted
 The tool only tested for limited use cases, thus might has various bugs / crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission.
 
 ### Emulator
-
-Nox player (version 7.0.x)
+- Nox player (version 7.0.x)
 
 ### Real device
-
-Pixel 2 (Android 11), Pixel 4 XL (Android 12)
+- Pixel 2 (Android 11), Pixel 4 XL (Android 12)
 
 ## Supported Assets
 - APK
