@@ -18,7 +18,7 @@ if you're willing to extract assets from real device, your device must be rooted
 
 ## Recommended environments
 
-The tool only tested for limited use cases, thus might have various bugs / crahses among other enviornments.
+The tool only tested for limited use cases, thus might have various bugs / crahses among other enviornments, and it basically works best with ADB running as root.
 
 ### Emulator
 
@@ -26,9 +26,8 @@ Nox emulator
 
 ### Real device
 
-Pixel 2, Pixel 4 XL (Both Rooted)
+Pixel 2, Pixel 4 XL
 
-The tool basically works best with *ADB running as root*
 
 # Installation
 
