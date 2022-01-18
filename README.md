@@ -18,7 +18,7 @@ Check out the [release page of this repo](https://github.com/ScripterSugar/wdfp-
 
 Currently only supports Windows (recommended 10 or higher)
 
-[Java 8 or later](https://www.java.com/ko/download/)
+Requires [Java 8 or later](https://www.java.com/ko/download/) to run FFDEC.
 
 if you're willing to extract assets from real device, your device must be rooted.
 
