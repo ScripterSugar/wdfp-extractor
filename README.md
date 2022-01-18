@@ -8,6 +8,10 @@ This tool will extract the assets from world flipper application installed on yo
 
 Currently supports Global / Japan variants.
 
+## Installation
+
+Check out the [release page of this repo](https://github.com/ScripterSugar/wdfp-extractor/releases).
+
 ## Requirements
 
 Currently only supports Windows (recommended 10 or higher)
@@ -29,11 +33,7 @@ Nox emulator
 Pixel 2, Pixel 4 XL
 
 
-# Installation
-
-Check out the release page of this repo.
-
-# Contribute
+## Contribution
 
 I won't actively manage this repository as far as it works for me, so if you're having trouble using the tool on your side, you're likely have to fix the problem yourself. Please feel free to open any PR.
 
