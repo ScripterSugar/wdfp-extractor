@@ -1,14 +1,20 @@
 const fs = require('fs');
+const { readFile } = require('fs/promises');
 const zlib = require('zlib');
 
-const readOrderedMap = (mapping) => {
+const asyncUnzip = (...args) =>
+  new Promise((resolve, reject) =>
+    zlib.unzip(...args, (err, res) => (err ? reject(err) : resolve(res)))
+  );
+
+const readOrderedMap = async (mapping) => {
   try {
     const readHeaderSize = (buffer) => buffer.readInt32LE(0);
 
     const headerSize = readHeaderSize(mapping);
 
     const zlibCompressedHeader = mapping.slice(4, headerSize + 4);
-    const uncompressedHeader = zlib.unzipSync(zlibCompressedHeader);
+    const uncompressedHeader = await asyncUnzip(zlibCompressedHeader);
 
     const readHeaderData = (headerDataBuffer) => {
       const entriesCount = headerDataBuffer.readInt32LE(0);
@@ -48,7 +54,7 @@ const readOrderedMap = (mapping) => {
 
     const contentSection = mapping.slice(4 + headerSize);
 
-    const readContentData = (contentBuffer, offsets) => {
+    const readContentData = async (contentBuffer, offsets) => {
       let currentOffset = 0;
 
       const contents = offsets.map(([, dataOffset]) => {
@@ -58,18 +64,20 @@ const readOrderedMap = (mapping) => {
         return content;
       });
 
-      return contents.map((content) => {
-        try {
-          const unzipped = zlib.unzipSync(content);
+      return Promise.all(
+        contents.map(async (content) => {
+          try {
+            const unzipped = await asyncUnzip(content);
 
-          return unzipped.toString('utf-8');
-        } catch (err) {
-          return readOrderedMap(content);
-        }
-      });
+            return unzipped.toString('utf-8');
+          } catch (err) {
+            return readOrderedMap(content);
+          }
+        })
+      );
     };
 
-    const values = readContentData(contentSection, entryOffsets);
+    const values = await readContentData(contentSection, entryOffsets);
 
     return keys.reduce(
       (acc, key, index) => ({
@@ -86,8 +94,8 @@ const readOrderedMap = (mapping) => {
   }
 };
 
-const openAndReadOrderedMap = (fileName) => {
-  const openedFile = fs.readFileSync(fileName);
+const openAndReadOrderedMap = async (fileName) => {
+  const openedFile = await readFile(fileName);
   return readOrderedMap(openedFile);
 };
 

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { exec, spawn } from 'child_process';
+import logger from './logger';
 import { NOX_PORT_LIST } from './constants';
 
 export const asyncMkdir = (...args) =>
@@ -31,17 +32,20 @@ export const asyncExec = async (command: string): Promise<string> => {
 export const sleep = (timeout) =>
   new Promise((resolve) => setTimeout(resolve, timeout));
 
-export const spawnCommand = (command, args, { wait }) => {
+export const spawnCommand = (command, args, { wait, logFn }) => {
   const child = spawn(command, args, {});
   child.stderr.pipe(process.stderr);
+  let awaitResolver;
+
+  const awaiter = new Promise((resolve) => {
+    awaitResolver = resolve;
+  });
+
+  if (logFn) {
+    child.stdout.on('data', (chunk) => logFn(chunk, awaitResolver));
+  }
 
   if (wait) {
-    let awaitResolver;
-
-    const awaiter = new Promise((resolve) => {
-      awaitResolver = resolve;
-    });
-
     let lastChunkString;
 
     child.stdout.on('data', (chunk) => {
@@ -55,9 +59,9 @@ export const spawnCommand = (command, args, { wait }) => {
     return { process: child, awaiter };
   }
 
-  child.stdout.pipe(process.stdout);
+  child.on('exit', awaitResolver);
 
-  return { process: child, awaiter: new Promise() };
+  return { process: child, awaiter };
 };
 
 export const refineLs = (lsResult): Array<LSResult> => {

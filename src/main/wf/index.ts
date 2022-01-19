@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import rimraf from 'rimraf';
 import { app } from 'electron';
 import { ChildProcess, spawn } from 'child_process';
+import { readdir, readFile } from 'fs/promises';
 import WfFileReader from './wfFileReader';
 import logger from './logger';
 import { LSResult, WFExtractorMetaData } from './typedefs';
@@ -166,8 +167,19 @@ class WfExtractor {
     jp: 'worldflipper',
   };
 
-  constructor({ region, rootDir } = {}) {
+  swfMode: 'simple' | 'full';
+
+  filePaths: string[];
+
+  asFilePaths: string[];
+
+  constructor({
+    region,
+    rootDir,
+    swfMode,
+  }: { swfMode: 'simple' | 'full' } = {}) {
     this.metadata = {};
+    this.swfMode = swfMode || 'simple';
 
     this.setRootPath(rootDir || DEFAULT_ROOT_PATH);
     logger.log(`Target region set as ${region}`);
@@ -405,11 +417,11 @@ class WfExtractor {
   mergeAssets = async () => {
     for (const mergeablePath of MERGEABLE_PATH_PREFIXES) {
       try {
-        const foundSubPathes = await asyncReadDir(
+        const foundSubPaths = await asyncReadDir(
           `${this.ROOT_PATH}/${mergeablePath}`
         );
 
-        for (const mergeableSubPath of foundSubPathes) {
+        for (const mergeableSubPath of foundSubPaths) {
           const foundAssets = await asyncReadDir(
             `${this.ROOT_PATH}/${mergeablePath}/${mergeableSubPath}`
           );
@@ -482,81 +494,186 @@ class WfExtractor {
       );
 
       new AdmZip(`${this.ROOT_PATH}/apk.apk`).extractAllTo(apkExtractionPath);
+
       logger.log(`APK extracted and saved to ${apkPath}`);
 
-      const assetFileList = fs.readdirSync(`${apkExtractionPath}/assets/`);
-
-      const swfFileName = assetFileList.find((file) => /.swf/.test(file));
-      const swfData = await asyncReadFile(
-        `${apkExtractionPath}/assets/${swfFileName}`
-      );
-
-      const swfCheckSum = crypto
-        .createHash('md5')
-        .update(swfData, 'utf8')
-        .digest('hex');
-
-      if (swfCheckSum !== this.metadata.lastSwfChecksum) {
-        logger.log(
-          'SWF checksum mismatch - decompile swf and export essential scripts... (This might take more than several minutes.)'
-        );
-
-        const swfExtractionPath = `${this.ROOT_PATH}/swf`;
-
-        if (fs.existsSync(swfExtractionPath)) {
-          logger.log('Cleaning up existing files...');
-          await new Promise((resolve) => rimraf(swfExtractionPath, resolve));
-          logger.log('File cleanup successful.');
-        }
-
-        const { process: swfExtractionProcess, awaiter } = await spawnCommand(
-          'java',
-          [
-            '-jar',
-            getAssetPath('/ffdec/ffdec.jar'),
-            '-export',
-            'script',
-            `${swfExtractionPath}`,
-            `${apkExtractionPath}/assets/worldflipper_android_release.swf`,
-          ],
-          { wait: 'boot_ffc6' }
-        );
-
-        await awaiter;
-
-        logger.log(
-          'boot_ffc6.as script generated. terminating extraction process...'
-        );
-
-        try {
-          await fkill(swfExtractionProcess.pid, { force: true });
-        } catch (err) {
-          logger.log(err.message);
-        }
-
-        logger.log('SWF Extraction successful.');
-      }
-
-      this.markMetaData(
-        {
-          lastPackageVersion: packageVersion,
-          lastSwfChecksum: swfCheckSum,
-        },
-        this.ROOT_PATH
-      );
+      this.markMetaData({
+        lastPackageVersion: packageVersion,
+      });
     } else {
       logger.log('APK not updated. skipping apk extraction...');
     }
   };
 
+  decompileAndExportSwf = async () => {
+    const apkExtractionPath = `${this.ROOT_PATH}/apk-extract`;
+    const swfExtractionPath = `${this.ROOT_PATH}/swf`;
+
+    const assetFileList = fs.readdirSync(`${apkExtractionPath}/assets/`);
+
+    const swfFileName = assetFileList.find((file) => /.swf/.test(file));
+
+    const swfData = await asyncReadFile(
+      `${apkExtractionPath}/assets/${swfFileName}`
+    );
+
+    const swfCheckSum = crypto
+      .createHash('md5')
+      .update(swfData, 'utf8')
+      .digest('hex');
+
+    console.log(swfCheckSum);
+
+    if (swfCheckSum !== this.metadata.lastSwfChecksum) {
+      logger.log(
+        'SWF checksum mismatch - decompile swf and export essential scripts... (This might take more than several minutes.)'
+      );
+    } else if (
+      this.swfMode === 'full' &&
+      this.metadata.lastSwfMode === 'simple'
+    ) {
+      logger.log('Processing full asset dump...');
+    } else {
+      logger.log('Skipping Swf extraction.');
+      return;
+    }
+
+    if (fs.existsSync(swfExtractionPath)) {
+      logger.log('Cleaning up existing files...');
+      await new Promise((resolve) => rimraf(swfExtractionPath, resolve));
+      logger.log('File cleanup successful.');
+    }
+
+    let logStarted = false;
+    let exportStarted = false;
+    let maxProgress = 0;
+
+    const { process: swfExtractionProcess, awaiter } = await spawnCommand(
+      'java',
+      [
+        '-jar',
+        getAssetPath('/ffdec/ffdec.jar'),
+        '-export',
+        'script',
+        `${swfExtractionPath}`,
+        `${apkExtractionPath}/assets/worldflipper_android_release.swf`,
+      ],
+      {
+        ...((this.swfMode === 'simple' && { wait: 'boot_ffc6' }) || {
+          logFn: (chunk, resolver) => {
+            const data = chunk.toString();
+
+            console.log(data);
+
+            if (!logStarted) {
+              logger.data({
+                type: 'progressStart',
+                data: {
+                  id: 'Preparing swf decompile...',
+                  max: 1,
+                },
+              });
+
+              logStarted = true;
+              return;
+            }
+            const [progress, max] = (
+              data.match(/[0-9]*\/[0-9]*/)?.[0]?.split('/') || []
+            ).map(parseFloat);
+
+            if (progress && max && progress === max) {
+              resolver();
+            }
+
+            if (!progress || !max) return;
+
+            if (exportStarted && progress > maxProgress) {
+              maxProgress = progress;
+              logger.data({
+                type: 'progress',
+                data: {
+                  id: 'Exporting ActionScripts...',
+                  progress,
+                },
+              });
+            } else if (!exportStarted) {
+              logger.data({
+                type: 'progressEnd',
+                data: {
+                  id: 'Preparing swf decompile...',
+                },
+              });
+              logger.data({
+                type: 'progressStart',
+                data: {
+                  id: 'Exporting ActionScripts...',
+                  max,
+                },
+              });
+              exportStarted = true;
+            }
+          },
+        }),
+      }
+    );
+
+    await awaiter;
+
+    if (this.swfMode === 'full') {
+      logger.data({
+        type: 'progressEnd',
+        data: {
+          id: 'Exporting ActionScripts...',
+        },
+      });
+    } else {
+      logger.log('scripts exported. terminating extraction process...');
+    }
+
+    try {
+      await fkill(swfExtractionProcess.pid, { force: true });
+    } catch (err) {
+      console.log(err);
+    }
+
+    this.markMetaData({
+      lastSwfChecksum: swfCheckSum,
+      lastSwfMode: this.swfMode,
+    });
+
+    logger.log('SWF Extraction successful.');
+  };
+
   extractMasterTable = async () => {
     logger.log('Start extracting orderedMaps...');
 
-    const masterTables = await this.fileReader.readBootFcAndGenerateOutput({
-      rootDir: this.ROOT_PATH,
-    });
+    const { masterTableFiles, filePaths } =
+      await this.fileReader.readBootFcAndGenerateOutput({
+        rootDir: this.ROOT_PATH,
+      });
+
+    this.filePaths = filePaths;
 
     logger.log('Successfully extracted orderedMaps.');
+  };
+
+  loadFilePaths = async () => {
+    if (this.filePaths) {
+      return;
+    }
+
+    try {
+      const loadedFilePaths = JSON.parse(
+        (await readFile(`${this.ROOT_PATH}/filePaths.lock`)).toString()
+      );
+      this.filePaths = loadedFilePaths;
+    } catch (err) {
+      console.log(err);
+    }
+
+    if (!this.filePaths?.length) {
+      throw new Error('FAILED_TO_LOAD_Paths');
+    }
   };
 
   characterListCache = null;
@@ -742,6 +859,11 @@ class WfExtractor {
       count += 1;
       try {
         if (!this.metadata.spriteProcessedLock?.includes(character)) {
+          await asyncMkdir(
+            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated`,
+            { recursive: true }
+          );
+
           const spriteImage = await asyncReadFile(
             `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/sprite_sheet.png`
           );
@@ -759,20 +881,21 @@ class WfExtractor {
               )
             ).toString()
           );
-          const { begin, end } = timeline.sequences.find(
-            (sequence) => sequence.name === 'walk_front'
-          );
-          await this.fileReader.cropSpritesFromAtlas({
+
+          const images = await this.fileReader.cropSpritesFromAtlas({
             sprite: spriteImage,
             atlases: spriteAtlases,
             destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/sprite_sheet`,
-            generateGif: {
-              begin,
-              end,
-              dest: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/walk_front.gif`,
-              delay: 150,
-            },
           });
+
+          for (const sequence of timeline.sequences) {
+            await this.fileReader.createGifFromSequence({
+              images,
+              sequence,
+              destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated`,
+              delay: 100,
+            });
+          }
           await this.markMetaData({
             spriteProcessedLock: [
               ...(this.metadata.spriteProcessedLock || []),
@@ -782,6 +905,11 @@ class WfExtractor {
         }
 
         if (!this.metadata.specialSpriteProcessedLock?.includes(character)) {
+          await asyncMkdir(
+            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated`,
+            { recursive: true }
+          );
+
           const specialImage = await asyncReadFile(
             `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet.png`
           );
@@ -796,9 +924,8 @@ class WfExtractor {
             sprite: specialImage,
             atlases: specialAtlases,
             destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet`,
-            generateGif: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special.gif`,
+            generateGif: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated/special.gif`,
           });
-
           await this.markMetaData({
             specialSpriteProcessedLock: [
               ...(this.metadata.specialSpriteProcessedLock || []),
@@ -829,6 +956,80 @@ class WfExtractor {
       },
     });
     logger.log('Successfully cropped and saved all character sprites.');
+  };
+
+  buildAsFilePaths = async () => {
+    const foundAsFiles = [];
+    const recurseFind = async (parentPath) => {
+      const children = await readdir(parentPath, { withFileTypes: true });
+
+      for (const child of children) {
+        const childPath = `${parentPath}/${child.name}`;
+
+        if (/\.as/.test(child.name)) {
+          foundAsFiles.push(childPath);
+        } else if (child.isDirectory()) {
+          await recurseFind(childPath);
+        }
+      }
+    };
+    logger.log('Searching for script files...');
+    await recurseFind(`${this.ROOT_PATH}/swf/scripts`);
+    logger.log(`${foundAsFiles.length} scripts found.`);
+
+    const asFilePaths = await this.fileReader.getAssetsFromAsFiles(
+      foundAsFiles
+    );
+
+    this.asFilePaths = asFilePaths;
+
+    console.log(asFilePaths);
+  };
+
+  development = async () => {
+    return this.buildAsFilePaths();
+
+    await this.loadFilePaths();
+    await this.buildDigestFileMap();
+
+    const possibleImageAssets = [];
+    const possibleAudioAssets = [];
+    const possibleAMF3Files = [];
+    const possibleXMLFiles = [];
+    const possibleHTMLFiles = [];
+
+    for (const filePath of this.filePaths) {
+      const pngDigest = await digestWfFileName(`${filePath}.png`);
+      if (await this.fileReader.checkDigestPath(pngDigest)) {
+        possibleImageAssets.push([`${filePath}.png`, pngDigest]);
+        continue;
+      }
+      const mp3Digest = await digestWfFileName(`${filePath}.mp3`);
+      if (await this.fileReader.checkDigestPath(mp3Digest)) {
+        possibleAudioAssets.push([`${filePath}.mp3`, mp3Digest]);
+        continue;
+      }
+      const amf3Digest = await digestWfFileName(`${filePath}.amf3.delate`);
+      if (await this.fileReader.checkDigestPath(amf3Digest)) {
+        possibleAMF3Files.push([`${filePath}.amf3.delate`, amf3Digest]);
+        continue;
+      }
+      const xmlDigest = await digestWfFileName(`${filePath}.xml.delate`);
+      if (await this.fileReader.checkDigestPath(xmlDigest)) {
+        possibleXMLFiles.push([`${filePath}.xml.delate`, xmlDigest]);
+        continue;
+      }
+      const htmlDigest = await digestWfFileName(`${filePath}.html.delate`);
+      if (await this.fileReader.checkDigestPath(htmlDigest)) {
+        possibleHTMLFiles.push([`${filePath}.html.delate`, xmlDigest]);
+        continue;
+      }
+    }
+    console.log(possibleImageAssets);
+    console.log(possibleAudioAssets);
+    console.log(possibleAMF3Files);
+    console.log(possibleXMLFiles);
+    console.log(possibleHTMLFiles);
   };
 
   close = async () => {

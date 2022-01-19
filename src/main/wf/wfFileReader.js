@@ -182,75 +182,95 @@ export default class WfFileReader {
   };
 
   createGifFromFrames = async (targetFrames, destPath, { delay } = {}) => {
-    let minX = Infinity;
-    let maxX = 0;
-    let minY = Infinity;
-    let maxY = 0;
+    try {
+      let minX = Infinity;
+      let maxX = 0;
+      let minY = Infinity;
+      let maxY = 0;
 
-    targetFrames.forEach(({ fx, w, fy, h }) => {
-      if (-fx < minX) {
-        minX = -fx;
-      }
-      if (-fx + w > maxX) {
-        maxX = -fx + w;
-      }
-      if (-fy < minY) {
-        minY = -fy;
-      }
-      if (-fy + h > maxY) {
-        maxY = -fy + h;
-      }
-    });
-    const refinedWidth = maxX - minX;
-    const refinedHeight = maxY - minY;
+      targetFrames.forEach(({ fx, w, fy, h }) => {
+        if (-fx < minX) {
+          minX = -fx;
+        }
+        if (-fx + w > maxX) {
+          maxX = -fx + w;
+        }
+        if (-fy < minY) {
+          minY = -fy;
+        }
+        if (-fy + h > maxY) {
+          maxY = -fy + h;
+        }
+      });
+      const refinedWidth = maxX - minX;
+      const refinedHeight = maxY - minY;
 
-    const refinedFrames = await Promise.all(
-      targetFrames.map(async ({ frame, fx, fy, w, h, n }) => {
-        const animationFrame = await sharp({
-          create: {
-            channels: 4,
-            background: { r: 245, g: 245, b: 245, alpha: 1 },
-            width: Math.max(refinedWidth, w),
-            height: Math.max(refinedHeight, h),
-          },
-        })
-          .png()
-          .composite([{ input: frame, left: -fx - minX, top: -fy - minY }])
-          .toBuffer();
-
-        const resized = await sharp(animationFrame)
-          .resize({
-            width: refinedWidth * 2,
-            height: refinedHeight * 2,
-            fit: 'inside',
-            kernel: 'nearest',
+      const refinedFrames = await Promise.all(
+        targetFrames.map(async (image) => {
+          const { frame, fx, fy, w, h, n } = image;
+          const animationFrame = await sharp({
+            create: {
+              channels: 4,
+              background: { r: 245, g: 245, b: 245, alpha: 1 },
+              width: Math.max(refinedWidth, w),
+              height: Math.max(refinedHeight, h),
+            },
           })
-          .toBuffer();
+            .png()
+            .composite([{ input: frame, left: -fx - minX, top: -fy - minY }])
+            .toBuffer();
 
-        return resized;
-      })
-    );
-    const encoder = new GifEncoder(refinedWidth * 2, refinedHeight * 2);
-    encoder.pipe(fs.createWriteStream(destPath));
-    encoder.setRepeat(0);
-    encoder.setQuality(1);
-    encoder.setDelay(delay || 75);
-    encoder.setTransparent('0xF5F5F5');
-    encoder.writeHeader();
+          const resized = await sharp(animationFrame)
+            .resize({
+              width: refinedWidth * 2,
+              height: refinedHeight * 2,
+              fit: 'inside',
+              kernel: 'nearest',
+            })
+            .toBuffer();
 
-    for (const image of refinedFrames) {
-      if (!image) continue;
-      const imagePixels = await new Promise((resolve) =>
-        getPixels(
-          `data:image/png;base64,${image.toString('base64')}`,
-          (err, pixels) => {
-            resolve(pixels);
-          }
-        )
+          return resized;
+        })
       );
-      encoder.addFrame(imagePixels.data);
+      const encoder = new GifEncoder(refinedWidth * 2, refinedHeight * 2);
+      encoder.pipe(fs.createWriteStream(destPath));
+      encoder.setRepeat(0);
+      encoder.setQuality(1);
+      encoder.setDelay(delay || 75);
+      encoder.setTransparent('0xF5F5F5');
+      encoder.writeHeader();
+
+      for (const image of refinedFrames) {
+        if (!image) continue;
+        const imagePixels = await new Promise((resolve) =>
+          getPixels(
+            `data:image/png;base64,${image.toString('base64')}`,
+            (err, pixels) => {
+              resolve(pixels);
+            }
+          )
+        );
+        encoder.addFrame(imagePixels.data);
+      }
+      encoder.finish();
+    } catch (err) {
+      console.log(err);
+      console.log(`Failed to save ${destPath.replace(this._rootDir, '')}`);
     }
-    encoder.finish();
+  };
+
+  createGifFromSequence = async ({ sequence, images, destPath, delay }) => {
+    const { begin, end, name } = sequence;
+
+    const targetFrames = images.filter(({ saveName }) => {
+      const frameIdx = parseFloat(saveName.replace(/[^0-9]/g, ''));
+
+      return frameIdx >= begin && frameIdx <= end;
+    });
+
+    this.createGifFromFrames(targetFrames, `${destPath}/${name}.gif`, {
+      delay,
+    });
   };
 
   cropSpritesFromAtlas = async ({
@@ -284,6 +304,12 @@ export default class WfFileReader {
         if (xyCache[`${x}${y}`]) {
           imageBuffer = await xyCache[`${x}${y}`];
           isDuplicated = true;
+          if (r) {
+            args.w = h;
+            args.h = w;
+            args.x = y;
+            args.y = x;
+          }
         } else {
           xyCache[`${x}${y}`] = new Promise((resolve) => {
             cacheResolver = resolve;
@@ -320,7 +346,6 @@ export default class WfFileReader {
         }
 
         if (!isDuplicated) {
-          console.log(`Savgin ${saveName}`);
           await mkdir(destPath, { recursive: true });
 
           await writeFile(path.join(destPath, saveName), imageBuffer);
@@ -347,7 +372,9 @@ export default class WfFileReader {
       );
     }
 
-    return true;
+    return images.sort((prev, next) =>
+      prev.saveName.localeCompare(next.saveName)
+    );
   };
 
   readPngAndGenerateOutput = async (
@@ -375,6 +402,55 @@ export default class WfFileReader {
     );
   };
 
+  getAssetsFromAsFiles = async (asFiles) => {
+    const possibleFilePaths = {};
+
+    logger.data({
+      type: 'progressStart',
+      data: {
+        id: 'Parsing possible asset paths...',
+        max: asFiles.length,
+      },
+    });
+    let rawCount = 0;
+
+    let count = 0;
+
+    for (const asFilePath of asFiles) {
+      count += 1;
+      logger.data({
+        type: 'progress',
+        data: {
+          id: 'Parsing possible asset paths...',
+          progress: count,
+        },
+      });
+      const asFileContent = await readFile(asFilePath);
+      Array.from(
+        asFileContent
+          .toString('utf-8')
+          .matchAll(/[a-zA-Z_0-9]+?\/[a-zA-Z_0-9\/]+/g)
+      ).forEach(([possiblePath]) => { // eslint-disable-line
+        rawCount += 1;
+        possibleFilePaths[possiblePath] = true;
+      });
+    }
+    logger.data({
+      type: 'progressEnd',
+      data: {
+        id: 'Parsing possible asset paths...',
+      },
+    });
+    const deduplicatedPaths = Object.keys(possibleFilePaths);
+    logger.log(
+      `Total of ${rawCount} asset paths found. ${
+        rawCount - deduplicatedPaths.length
+      } entries removed for deduplication.`
+    );
+
+    return deduplicatedPaths;
+  };
+
   readBootFcAndGenerateOutput = async ({ rootDir = this._rootDir } = {}) => {
     const openedFile = fs.readFileSync(`${rootDir}/swf/scripts/boot_ffc6.as`);
 
@@ -397,6 +473,7 @@ export default class WfFileReader {
     ]);
 
     const masterTableFiles = [];
+    const possibleFilePaths = {};
 
     logger.data({
       type: 'progressStart',
@@ -431,7 +508,9 @@ export default class WfFileReader {
         .join('/')}`;
       const orederedMapFilePath = `${fileRootName}.orderedmap`;
       await copyFileRecursive(filePath, orederedMapFilePath);
-      const orderedMapDataJson = openAndReadOrderedMap(orederedMapFilePath);
+      const orderedMapDataJson = await openAndReadOrderedMap(
+        orederedMapFilePath
+      );
       const stringifiedJson = JSON.stringify(
         orderedMapDataJson,
         (k, v) => {
@@ -445,6 +524,12 @@ export default class WfFileReader {
         .replace(/\[\\"/g, '["')
         .replace(/\\"\]/g, '"]')
         .replace(/\\",\\"/g, '","');
+
+      Array.from(
+        stringifiedJson.matchAll(/[a-zA-Z_0-9]+?\/[a-zA-Z_0-9\/]+/g)
+      ).forEach(([possiblePath]) => {
+        possibleFilePaths[possiblePath] = true;
+      });
       const jsonFilePath = `${fileRootName}.json`;
       logger.devLog(`Exporting orderedmap to JSON ${jsonFilePath}`);
       await writeFileRecursive(jsonFilePath, stringifiedJson);
@@ -459,6 +544,16 @@ export default class WfFileReader {
       },
     });
 
-    return masterTableFiles.filter((v) => v);
+    const filePaths = Object.keys(possibleFilePaths);
+
+    await writeFile(
+      `${this._rootDir}/filePaths.lock`,
+      JSON.stringify(filePaths)
+    );
+
+    return {
+      masterTableFiles: masterTableFiles.filter((v) => v),
+      filePaths,
+    };
   };
 }
