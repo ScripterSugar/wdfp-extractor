@@ -531,7 +531,7 @@ class WfExtractor {
         try {
           await fkill(swfExtractionProcess.pid, { force: true });
         } catch (err) {
-          logger.log(err);
+          logger.log(err.message);
         }
 
         logger.log('SWF Extraction successful.');

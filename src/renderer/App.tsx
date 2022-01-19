@@ -384,8 +384,23 @@ const AppContent = () => {
         });
       }
       default: {
+        let errorMsg;
+
+        console.log(error);
+        try {
+          errorMsg =
+            (typeof error === 'string' && error) ||
+            error?.message ||
+            JSON.stringify(error);
+        } catch (err) {
+          errorMsg = 'UNKNOWN';
+        }
+
+        if (typeof errorMsg !== 'string') {
+          errorMsg = 'UNKNOWN';
+        }
         setExtractionError({
-          error,
+          error: errorMsg,
           actions: [
             <WfDangerButton onClick={() => responseExtraction('done')}>
               Abort
@@ -558,6 +573,7 @@ const AppContent = () => {
       <Modal open={openInfoModal} onClose={() => setOpenInfoModal(false)}>
         <img
           src={theoSpecial}
+          onClick={() => window.electron.ipcRenderer.openDevTools()}
           alt="theo"
           style={{ width: '100%', marginBottom: 16 }}
         />

@@ -29,6 +29,10 @@ ipcMain.on('showOpenDialog', async (event, arg) => {
   event.reply('showOpenDialog', returnedPath);
 });
 
+ipcMain.on('openDevTools', async (event, arg) => {
+  mainWindow.webContents.openDevTools();
+});
+
 ipcMain.on('getAppVersion', async (event) => {
   event.reply('appVersion', app.getVersion());
 });

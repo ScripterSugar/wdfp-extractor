@@ -1,6 +1,6 @@
 {
   "name": "wdfp-extractor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "World Flipper asset extractor.",
   "scripts": {
     "build": "concurrently \"npm run build:main\" \"npm run build:renderer\"",
@@ -90,8 +90,8 @@
     ]
   },
   "repository": {
-    "type" : "git",
-    "url" : "https://github.com/ScripterSugar/wdfp-extractor.git"
+    "type": "git",
+    "url": "https://github.com/ScripterSugar/wdfp-extractor.git"
   },
   "author": {
     "name": "NASOM",
@@ -181,7 +181,6 @@
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.4",
     "electron-updater": "^4.6.4",
-    "fkill": "7.2.1",
     "get-pixels": "^3.3.3",
     "gif-encoder": "^0.7.2",
     "history": "^5.2.0",

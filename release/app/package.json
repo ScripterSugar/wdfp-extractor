@@ -1,6 +1,6 @@
 {
   "name": "wdfp-extractor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "World Flipper asset extractor.",
   "main": "./dist/main/main.js",
   "author": {
@@ -13,6 +13,7 @@
     "postinstall": "npm run electron-rebuild && npm run link-modules"
   },
   "dependencies": {
+    "fkill": "7.2.1",
     "sharp": "^0.29.3"
   },
   "license": "MIT"
