@@ -39,7 +39,7 @@ The tool only tested for limited use cases, thus might has various bugs / crahse
 
 Simply just connect your device, select the directory you want to save your assets, and click on the Extract Data button.
 
-**You need to select extract master table option if it was never extracted before.**
+**Do not close the app even if it hangs. The process might hangs a lot and few tasks require more than dozens of minutes. Be patient while extraction is in progress**
 
 ## Supported Assets
 - APK
