@@ -417,7 +417,7 @@ export default class WfFileReader {
           progress: count,
         },
       });
-      const digest = `${dir}/${fileName}`;
+      const digest = `${dir}${fileName}`;
 
       const filePath = await this.checkDigestPath(digest);
 
