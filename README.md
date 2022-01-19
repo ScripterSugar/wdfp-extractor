@@ -1,6 +1,4 @@
-# World Filpper Asset Extractor
-
-![wdfp](https://user-images.githubusercontent.com/19164553/149924519-91e016e3-5ac7-4d97-a8f3-c7c833f79e76.gif)
+# World Filpper Asset Extracto
 
 #### DISCLAIMER: All the rights of extracted assets belong to cygames/citail. I do not encourage you to use any of extracted assets in inappropriate purpose. If you use any assets extracted by this tool, you do so at your sole risk.
 
@@ -35,6 +33,13 @@ The tool only tested for limited use cases, thus might has various bugs / crahse
 
 ### Real device
 - Pixel 2 (Android 11), Pixel 4 XL (Android 12)
+
+## Usage
+![wdfp](https://user-images.githubusercontent.com/19164553/149924519-91e016e3-5ac7-4d97-a8f3-c7c833f79e76.gif)
+
+Simply just onnect your device, select the directory you want to save your assets, and click on the Extract Data button.
+
+**You need to select extract master table option if it was never extracted before.**
 
 ## Supported Assets
 - APK
