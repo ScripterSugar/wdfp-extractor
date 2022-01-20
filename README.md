@@ -8,7 +8,7 @@
 
 Asset Extraction tool for World Flipper.
 
-This tool extracts the assets from world flipper application installed on your device / emulator using ADB and FFDEC, rename digested file paths with original file path, export irregular (amf, orderedmap, etc) files in regular data format such as json.
+This tool extracts the assets from world flipper application installed on your device / emulator using ADB and FFDEC, rename digested file paths with original file path, restore corrupted png and mp3 data, export irregular (amf, orderedmap, etc) files in regular data format such as json.
 
 Currently only supports Global / Japan variants. 
 
