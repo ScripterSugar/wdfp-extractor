@@ -1,6 +1,6 @@
 # World Filpper Asset Extractor
 
-#### DISCLAIMER: All the rights of extracted assets belong to cygames/citail and/or its affiliates. Do not share and data extracted by the tool. I do not encourage you to use any of extracted assets in inappropriate purpose. If you use any assets extracted by this tool, you do so at your sole risk.
+#### DISCLAIMER: All the rights of extracted assets belong to cygames/citail and/or its affiliates. Do not share the files extracted by the tool. I do not encourage you to use any of extracted assets in inappropriate purpose. If you use any assets extracted by this tool, you do so at your sole risk.
 
 <p align="center">
  <img src="https://user-images.githubusercontent.com/19164553/150029824-aace84ff-766d-4555-ba72-794d610761b5.gif" alt="theoSpecial" />
@@ -26,7 +26,9 @@ if you're willing to extract assets from real device, your device must be rooted
 
 ## Recommended environments
 
-The tool only tested for limited use cases, thus is should various bugs or even crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission and grants full access to data directory.
+The tool only tested for limited use cases, thus should has various bugs or even crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission and grants full access to data directory.
+
+To use this tool, your device should at least have file-listing access to the /data directory.
 
 ### Emulator
 - Nox player (version 7.0.x) - **Recommended (Global)**
@@ -38,6 +40,8 @@ The tool only tested for limited use cases, thus is should various bugs or even 
 ![wdfp](https://user-images.githubusercontent.com/19164553/149924519-91e016e3-5ac7-4d97-a8f3-c7c833f79e76.gif)
 
 Simply just connect your device, select the directory you want to save your assets, and click on the Extract Data button.
+
+Once the extraction is done, you can find inflated asset files located in the output directory under your extraction directory.
 
 **Do not close the app even if it hangs. The process might hangs a lot and few tasks require more than dozens of minutes. Be patient while extraction is in progress**
 
