@@ -28,6 +28,8 @@ if you're willing to extract assets from real device, your device must be rooted
 
 The tool only tested for limited use cases, thus should have various bugs or even crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission and grants full access to data directory.
 
+To use this tool, your device should at least have file-listing access to the /data directory.
+
 ### Emulator
 - Nox player (version 7.0.x) - **Recommended (Global)**
 
