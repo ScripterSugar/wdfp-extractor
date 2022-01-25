@@ -39,6 +39,8 @@ const getAssetPath = (...paths: string[]): string => {
   return path.join(RESOURCES_PATH, ...paths);
 };
 
+const pushExist = (array, arg) => arg && array.push(arg);
+
 const DIR_CACHE = {};
 
 const createAndCacheDirectory = async (dir) => {
@@ -60,9 +62,9 @@ const getDeviceList = async () => {
     .map((val) => val.split('\t')[0]);
 };
 
-const tryConnect = async () => {
+const tryConnect = async (customPort) => {
   await Promise.all(
-    NOX_PORT_LIST.map((port) => {
+    [...NOX_PORT_LIST, ...((customPort && [customPort]) || [])].map((port) => {
       return asyncExec(`${ADB_PATH} connect 127.0.0.1:${port}`);
     })
   );
@@ -144,6 +146,8 @@ class AdbShell {
   };
 }
 
+type PossibleAssetPathTuple = [string, string];
+
 class WfExtractor {
   metadata: WFExtractorMetaData;
 
@@ -152,6 +156,13 @@ class WfExtractor {
   adbShell: AdbShell;
 
   adbWfPath: string;
+
+  possibleAssetCache: {
+    possibleImageAssets: PossibleAssetPathTuple[];
+    possibleAudioAssets: PossibleAssetPathTuple[];
+    possibleAmfAssets: PossibleAssetPathTuple[];
+    sprites: { [spritePath: string]: string };
+  };
 
   deltaFiles: any[];
 
@@ -174,13 +185,17 @@ class WfExtractor {
 
   asFilePaths: string[];
 
+  customPort: string;
+
   constructor({
     region,
     rootDir,
+    customPort,
     swfMode,
   }: { swfMode: 'simple' | 'full' } = {}) {
     this.metadata = {};
     this.swfMode = swfMode || 'simple';
+    this.customPort = customPort;
 
     this.setRootPath(rootDir || DEFAULT_ROOT_PATH);
     logger.log(`Target region set as ${region}`);
@@ -240,7 +255,7 @@ class WfExtractor {
     if (deviceId) {
       this.DEVICE_ID = deviceId;
     } else {
-      await tryConnect();
+      await tryConnect(this.customPort);
       const foundDevices = await getDeviceList();
 
       logger.log(`${foundDevices.length} device(s) found.`);
@@ -1063,7 +1078,20 @@ class WfExtractor {
     );
   };
 
-  extractPossibleAssets = async () => {
+  digestAndCheckFilePath = async (filePath) => {
+    const digest = await digestWfFileName(filePath);
+    const digestPath = await this.fileReader.checkDigestPath(digest);
+
+    if (digestPath) {
+      return [filePath, digestPath];
+    }
+
+    return null;
+  };
+
+  loadPossibleAssets = async () => {
+    if (this.possibleAssetCache) return this.possibleAssetCache;
+
     const possibleImageAssets = [];
     const possibleAudioAssets = [];
     const possibleAmfAssets = [];
@@ -1073,28 +1101,20 @@ class WfExtractor {
     for (const filePath of [
       ...new Set([...this.asFilePaths, ...this.filePaths]),
     ]) {
-      const pngDigest = await digestWfFileName(`${filePath}.png`);
-      const pngDigestPath = await this.fileReader.checkDigestPath(pngDigest);
-      if (pngDigestPath) {
-        possibleImageAssets.push([`${filePath}.png`, pngDigestPath]);
-      }
-      const spriteDigest = await digestWfFileName(
-        `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.png`
+      pushExist(
+        possibleImageAssets,
+        this.digestAndCheckFilePath(`${filePath}.png`)
       );
-      const spriteDigestPath = await this.fileReader.checkDigestPath(
-        spriteDigest
+      pushExist(
+        possibleImageAssets,
+        this.digestAndCheckFilePath(
+          `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.png`
+        )
       );
-      if (spriteDigestPath) {
-        possibleImageAssets.push([
-          `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.png`,
-          spriteDigestPath,
-        ]);
-      }
-      const mp3Digest = await digestWfFileName(`${filePath}.mp3`);
-      const mp3DigestPath = await this.fileReader.checkDigestPath(mp3Digest);
-      if (mp3DigestPath) {
-        possibleAudioAssets.push([`${filePath}.mp3`, mp3DigestPath]);
-      }
+      pushExist(
+        possibleAudioAssets,
+        this.digestAndCheckFilePath(`${filePath}.mp3`)
+      );
     }
 
     const fileNameMap = {};
@@ -1111,96 +1131,87 @@ class WfExtractor {
         `/${fileName}`,
         ''
       )}`;
-
       fileNameMap[parentPath] = fileNameRoot;
+      const atlasEntry = this.digestAndCheckFilePath(
+        imagePath.replace(fileName, `${fileNameRoot}.atlas.amf3.deflate`)
+      );
+      const pixelartFrameEntry = this.digestAndCheckFilePath(
+        imagePath.replace(fileName, 'pixelart.frame.amf3.deflate')
+      );
+      const frameEntry = this.digestAndCheckFilePath(
+        imagePath.replace(fileName, `${fileNameRoot}.frame.amf3.deflate`)
+      );
+      const pixelArtTimelineEntry = this.digestAndCheckFilePath(
+        (timelinePath = imagePath.replace(
+          fileName,
+          'pixelart.timeline.amf3.deflate'
+        ))
+      );
+      const timelineEntry = this.digestAndCheckFilePath(
+        imagePath.replace(fileName, `${fileNameRoot}.timeline.amf3.deflate`)
+      );
+      const partsEntry = this.digestAndCheckFilePath(
+        imagePath.replace(fileName, `${fileNameRoot}.parts.amf3.deflate`)
+      );
+      const atfEntry = this.digestAndCheckFilePath(
+        imagePath.replace(fileName, `${fileNameRoot}.atf.deflate`)
+      );
 
-      const atlasPath = imagePath.replace(
-        fileName,
-        `${fileNameRoot}.atlas.amf3.deflate`
-      );
-      const framePath = imagePath.replace(
-        fileName,
-        'pixelart.frame.amf3.deflate'
-      );
-      const frame2Path = imagePath.replace(
-        fileName,
-        `${fileNameRoot}.frame.amf3.deflate`
-      );
-      const timelinePath = imagePath.replace(
-        fileName,
-        'pixelart.timeline.amf3.deflate'
-      );
-      const timeline2Path = imagePath.replace(
-        fileName,
-        `${fileNameRoot}.timeline.amf3.deflate`
-      );
-      const atfPath = imagePath.replace(
-        fileName,
-        `${fileNameRoot}.atf.deflate`
-      );
-
-      const atlasDigest = await digestWfFileName(atlasPath);
-      const frameDigest = await digestWfFileName(framePath);
-      const frame2Digest = await digestWfFileName(frame2Path);
-      const timelineDigest = await digestWfFileName(timelinePath);
-      const timeline2Digest = await digestWfFileName(timeline2Path);
-      const atfDigest = await digestWfFileName(atfPath);
-
-      const atlasDigestPath = await this.fileReader.checkDigestPath(
-        atlasDigest
-      );
-      const frameDigestPath = await this.fileReader.checkDigestPath(
-        frameDigest
-      );
-      const frame2DigestPath = await this.fileReader.checkDigestPath(
-        frame2Digest
-      );
-      const timelineDigestPath = await this.fileReader.checkDigestPath(
-        timelineDigest
-      );
-      const timeline2DigestPath = await this.fileReader.checkDigestPath(
-        timeline2Digest
-      );
-      const atfDigestPath = await this.fileReader.checkDigestPath(atfDigest);
-      if (frameDigestPath) {
-        possibleAmfAssets.push([framePath, frameDigestPath]);
-      }
-      if (frame2DigestPath) {
-        possibleAmfAssets.push([frame2Path, frame2DigestPath]);
-      }
-      if (atlasDigestPath) {
+      pushExist(possibleAmfAssets, partsEntry);
+      pushExist(possibleAmfAssets, frameEntry);
+      pushExist(possibleAmfAssets, pixelartFrameEntry);
+      pushExist(possibleAmfAssets, atfEntry);
+      if (atlasEntry) {
         sprites[parentPath] = 'sprite';
-        possibleAmfAssets.push([atlasPath, atlasDigestPath]);
+        possibleAmfAssets.push(atlasEntry);
       }
-      if (timelineDigestPath) {
+      if (timelineEntry) {
         sprites[parentPath] = 'animated';
-        possibleAmfAssets.push([timelinePath, timelineDigestPath]);
+        possibleAmfAssets.push(timelineEntry);
       }
-      if (timeline2DigestPath) {
+      if (pixelArtTimelineEntry) {
         sprites[parentPath] = 'animated_2';
-        possibleAmfAssets.push([timeline2Path, timeline2DigestPath]);
-      }
-      if (atfDigestPath) {
-        sprites[parentPath] = 'animated';
-        possibleAmfAssets.push([atfPath, atfDigestPath]);
+        possibleAmfAssets.push(pixelArtTimelineEntry);
       }
       if (this.__debug) {
-        const debugPath = imagePath.replace(
-          fileName,
-          `${this.__debug.replace(/\$rootname/, fileNameRoot)}`
+        const debugEntry = this.digestAndCheckFilePath(
+          imagePath.replace(
+            fileName,
+            `${this.__debug.replace(/\$rootname/, fileNameRoot)}`
+          )
         );
-        const debugDigest = await digestWfFileName(debugPath);
-        const debugDigestPath = await this.fileReader.checkDigestPath(
-          debugDigest
-        );
-        if (debugDigestPath) {
-          sprites[parentPath] = 'animated_2';
-          possibleAmfAssets.push([debugPath, debugDigestPath]);
-        }
+        pushExist(possibleAmfAssets, debugEntry);
       }
     }
     amf3Tracker.end();
 
+    this.possibleAssetCache = {
+      possibleImageAssets,
+      possibleAudioAssets,
+      possibleAmfAssets,
+      sprites,
+    };
+
+    return this.possibleAssetCache;
+  };
+
+  extractPossibleAudioAssets = async () => {
+    const { possibleAudioAssets } = await this.loadPossibleAssets();
+
+    const audioTracker = logger.progressStart({
+      id: 'Extracting audio assets...',
+      max: possibleAudioAssets.length,
+    });
+    for (const [fileName, filePath] of possibleAudioAssets) {
+      audioTracker.progress();
+      await this.fileReader.readMp3AndGenerateOutput(filePath, fileName);
+    }
+    audioTracker.end();
+  };
+
+  extractPossibleImageAssets = async () => {
+    const { possibleImageAssets, possibleAmfAssets, sprites } =
+      await this.loadPossibleAssets();
     const imageTracker = logger.progressStart({
       id: 'Extracting general image assets...',
       max: possibleImageAssets.length,
@@ -1221,8 +1232,6 @@ class WfExtractor {
     }
     amfAssetTracker.end();
 
-    return;
-
     let processedSprites = {};
 
     try {
@@ -1242,16 +1251,12 @@ class WfExtractor {
     for (const [spritePath, type] of spriteEntries) {
       spriteTracker.progress();
       count += 1;
-      if (
-        processedSprites[spritePath] === type &&
-        !/\/battle\/boss\/administrator/.test(spritePath)
-      )
-        continue;
+      if (processedSprites[spritePath] === type) continue;
       try {
         await this.processSpritesByAtlases(spritePath, {
-          animate: /animated/.test(type),
+          // animate: /animated/.test(type),
           fileRoot: fileNameMap[spritePath],
-          timelineRoot: type === 'animated_2' ? fileNameMap[spritePath] : '',
+          // timelineRoot: type === 'animated_2' ? fileNameMap[spritePath] : '',
         });
         processedSprites[spritePath] = type;
       } catch (err) {
@@ -1269,17 +1274,8 @@ class WfExtractor {
       `${this.ROOT_PATH}/sprites.lock`,
       JSON.stringify(processedSprites, null, 2)
     );
-    spriteTracker.end();
 
-    const audioTracker = logger.progressStart({
-      id: 'Extracting audio assets...',
-      max: possibleAudioAssets.length,
-    });
-    for (const [fileName, filePath] of possibleAudioAssets) {
-      audioTracker.progress();
-      await this.fileReader.readMp3AndGenerateOutput(filePath, fileName);
-    }
-    audioTracker.end();
+    spriteTracker.end();
   };
 
   development = async (debug) => {
@@ -1294,7 +1290,7 @@ class WfExtractor {
 
     // return this.extractCharacterSpriteMetaDatas();
 
-    return this.extractPossibleAssets();
+    return this.extractPossibleImageAssets();
   };
 
   close = async () => {

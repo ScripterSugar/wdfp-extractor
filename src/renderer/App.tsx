@@ -218,10 +218,14 @@ const AppContent = () => {
   const [options, setOptions] = usePermanentState(
     {
       extractMaster: true,
-      extractImage: true,
+      extractCharacterImage: true,
+      extractMiscImage: true,
+      extractAudio: true,
+      customPort: '',
       processAtlas: false,
       region: 'gl',
       debug: '',
+      isDebug: false,
     },
     'EXTRACT_OPTION',
     (val) => {
@@ -230,7 +234,7 @@ const AppContent = () => {
       } catch (err) {
         return {
           extractMaster: true,
-          extractImage: true,
+          extractCharacterImage: true,
           processAtlas: false,
           region: 'gl',
         };
@@ -420,7 +424,10 @@ const AppContent = () => {
     setDevConsoleLogs([]);
     setOpenSelectOption(false);
     setShowDevConsole(true);
-    window.electron.ipcRenderer.startExtraction(targetDir, options);
+    window.electron.ipcRenderer.startExtraction(targetDir, {
+      ...options,
+      debug: options.isDebug && options.debug,
+    });
 
     let ipcResponse;
 
@@ -574,7 +581,10 @@ const AppContent = () => {
       <Modal open={openInfoModal} onClose={() => setOpenInfoModal(false)}>
         <img
           src={theoSpecial}
-          onClick={() => window.electron.ipcRenderer.openDevTools()}
+          onClick={() => {
+            onChangeOptions('isDebug', true);
+            window.electron.ipcRenderer.openDevTools();
+          }}
           alt="theo"
           style={{ width: '100%', marginBottom: 16 }}
         />
@@ -636,9 +646,12 @@ const AppContent = () => {
               <Typography>Extract character image assets</Typography>
 
               <Switch
-                value={options.extractImage}
+                value={options.extractCharacterImage}
                 onClick={() =>
-                  onChangeOptions('extractImage', !options.extractImage)
+                  onChangeOptions(
+                    'extractCharacterImage',
+                    !options.extractCharacterImage
+                  )
                 }
               />
             </LayoutFlexSpaceBetween>
@@ -648,25 +661,70 @@ const AppContent = () => {
                 <IndicatorTypo>Crop spritesheets / Generate GIF</IndicatorTypo>
               </LayoutFlexColumn>
               <Switch
-                data-disabled={!options.extractImage}
+                data-disabled={!options.extractCharacterImage}
                 value={options.processAtlas}
                 onClick={() =>
-                  options.extractImage &&
+                  options.extractCharacterImage &&
                   onChangeOptions('processAtlas', !options.processAtlas)
                 }
               />
             </LayoutFlexSpaceBetween>
           </LayoutFlexDivideHalf>
+          <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
+            <LayoutFlexSpaceBetween>
+              <Typography>Extract general image assets</Typography>
+              <IndicatorTypo>
+                Images of items, bosses, ui, status and more.
+              </IndicatorTypo>
+              <Switch
+                value={options.extractMiscImage}
+                onClick={() =>
+                  onChangeOptions('extractMiscImage', !options.extractMiscImage)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+            <LayoutFlexSpaceBetween>
+              <LayoutFlexColumn>
+                <Typography>Extract audio assets</Typography>
+                <IndicatorTypo>Voiceline, BGM, S/E</IndicatorTypo>
+              </LayoutFlexColumn>
+              <switch
+                value={options.extractAudio}
+                onClick={() =>
+                  onChangeOptions('extractAudio', !options.extractAudio)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+          </LayoutFlexDivideHalf>
           <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
-            <Typography style={{ flexShrink: 0, marginRight: 16 }}>
-              Debug String
-            </Typography>
+            <LayoutFlexColumn>
+              <Typography>Custom emulator port</Typography>
+              <IndicatorTypo>
+                Specify your emulator port if needed
+              </IndicatorTypo>
+            </LayoutFlexColumn>
             <input
               style={{ width: '100%' }}
-              value={options.debug}
-              onChange={(event) => onChangeOptions('debug', event.target.value)}
+              value={options.customPort}
+              onChange={(event) =>
+                onChangeOptions('customPort', event.target.value)
+              }
             />
           </LayoutFlexSpaceBetween>
+          {isDebug && (
+            <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
+              <Typography style={{ flexShrink: 0, marginRight: 16 }}>
+                Debug String
+              </Typography>
+              <input
+                style={{ width: '100%' }}
+                value={options.debug}
+                onChange={(event) =>
+                  onChangeOptions('debug', event.target.value)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+          )}
         </LayoutFlexColumn>
         <IndicatorTypo style={{ marginTop: 16, marginLeft: 4 }}>
           APK region (version)

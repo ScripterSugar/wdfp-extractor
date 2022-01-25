@@ -75,16 +75,24 @@ ipcMain.on(
     {
       region,
       extractMaster,
-      extractImage,
+      extractCharacterImage,
+      extractMiscImage,
+      extractAudio,
       processAtlas,
       swfMode = 'full',
+      customPort,
       debug,
     }
   ) => {
     let replyPacket;
     let extractionPhase = 0;
 
-    const wfExtractor = new WfExtractor({ region, rootDir, swfMode });
+    const wfExtractor = new WfExtractor({
+      region,
+      rootDir,
+      swfMode,
+      customPort,
+    });
 
     if (debug) {
       await wfExtractor.development(debug);
@@ -144,7 +152,7 @@ ipcMain.on(
         }
 
         if (extractionPhase <= 6) {
-          if (extractImage) {
+          if (extractCharacterImage) {
             await wfExtractor.extractCharacterImageAssets();
 
             if (processAtlas) {
@@ -153,6 +161,22 @@ ipcMain.on(
             }
           }
           extractionPhase = 7;
+        }
+
+        if (extractionPhase <= 7) {
+          if (extractMiscImage) {
+            await wfExtractor.extractPossibleImageAssets();
+          }
+
+          extractionPhase = 8;
+        }
+
+        if (extractionPhase <= 8) {
+          if (extractAudio) {
+            await wfExtractor.extractPossibleAudioAssets();
+          }
+
+          extractionPhase = 9;
         }
 
         break;
