@@ -1,6 +1,6 @@
 # World Filpper Asset Extractor
 
-#### DISCLAIMER: All the rights of extracted assets belong to cygames/citail and/or its affiliates. I do not encourage you to use any of extracted assets in inappropriate purpose. If you use any assets extracted by this tool, you do so at your sole risk.
+#### DISCLAIMER: All the rights of extracted assets belong to cygames/citail and/or its affiliates. Do not share and data extracted by the tool. I do not encourage you to use any of extracted assets in inappropriate purpose. If you use any assets extracted by this tool, you do so at your sole risk.
 
 <p align="center">
  <img src="https://user-images.githubusercontent.com/19164553/150029824-aace84ff-766d-4555-ba72-794d610761b5.gif" alt="theoSpecial" />
@@ -26,7 +26,7 @@ if you're willing to extract assets from real device, your device must be rooted
 
 ## Recommended environments
 
-The tool only tested for limited use cases, thus might has various bugs / crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission and grants full access to data directory.
+The tool only tested for limited use cases, thus is should various bugs or even crahses among other enviornments. Basically this tool works best with modified, non-production adbd, which supports adb running as root permission and grants full access to data directory.
 
 ### Emulator
 - Nox player (version 7.0.x) - **Recommended (Global)**
@@ -46,14 +46,14 @@ Simply just connect your device, select the directory you want to save your asse
 - Decompiled SWF
 - Master table
 - Character image assets
-- Character image atlases/frame/timeline (exported as json format)
+- Character image atlases/frame/parts/timeline (exported as json format)
+- Miscellaneous image assets.
+- Audio files including BGM, Character voice lines, S/E and more.
 - Cropped sprites based on atlases and sprite sheet
-- Animated images generated from sprites (speical / front_walk only)
+- Animated images generated from sprites (Character images only)
 
 ## Planned feature
 - Support extraction of ability texts
-- Support extraction of miscellaneous image assets
-- Support extraction of voice files
 - Data viewer
 
 ## Contributing
