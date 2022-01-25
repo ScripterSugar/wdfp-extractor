@@ -416,8 +416,10 @@ class WfExtractor {
 
     logger.log('Asset dump successful.');
 
+    const deviceDateTime = await this.adbShell.exec('date "+%Y-%m-%d %H:%M"');
+
     this.markMetaData({
-      lastExtractionDate: moment().format(DATEFORMAT_A),
+      lastExtractionDate: deviceDateTime,
       ...(isChanged && { lockedHashMap: false }),
     });
   };

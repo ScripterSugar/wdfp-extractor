@@ -699,7 +699,7 @@ const AppContent = () => {
               />
             </LayoutFlexSpaceBetween>
           </LayoutFlexDivideHalf>
-          <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
+          <LayoutFlexDivideHalf>
             <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
               <LayoutFlexColumn>
                 <Typography>Custom emulator port</Typography>
@@ -708,7 +708,7 @@ const AppContent = () => {
                 </IndicatorTypo>
               </LayoutFlexColumn>
               <input
-                style={{ width: 240 }}
+                style={{ width: 80 }}
                 value={options.customPort}
                 onChange={(event) =>
                   onChangeOptions('customPort', event.target.value)
