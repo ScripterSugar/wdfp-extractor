@@ -7,10 +7,11 @@ import sharp from 'sharp';
 import GifEncoder from 'gif-encoder';
 import getPixels from 'get-pixels';
 import path from 'path';
+import { restoreCorruptedMp3 } from './restoreMp3';
 import { openAndReadOrderedMap } from './readOrderedMap';
 import { digestWfFileName } from './digest';
 import logger from './logger';
-import { ELIGIBLE_PATH_PREFIXES } from './constants';
+import { ELIGIBLE_PATH_PREFIXES, POSSIBLE_PATH_REGEX } from './constants';
 
 function bufferToStream(binary) {
   const readableInstanceStream = new Readable({
@@ -188,7 +189,7 @@ export default class WfFileReader {
       let minY = Infinity;
       let maxY = 0;
 
-      targetFrames.forEach(({ fx, w, fy, h }) => {
+      targetFrames.forEach(({ fx = 0, w = 0, fy = 0, h = 0 }) => {
         if (-fx < minX) {
           minX = -fx;
         }
@@ -207,7 +208,7 @@ export default class WfFileReader {
 
       const refinedFrames = await Promise.all(
         targetFrames.map(async (image) => {
-          const { frame, fx, fy, w, h, n } = image;
+          const { frame, fx = 0, fy = 0, w = 0, h = 0 } = image;
           const animationFrame = await sharp({
             create: {
               channels: 4,
@@ -259,14 +260,38 @@ export default class WfFileReader {
     }
   };
 
-  createGifFromSequence = async ({ sequence, images, destPath, delay }) => {
+  createGifFromSequence = async ({
+    sequence,
+    images,
+    destPath,
+    delay,
+    indexMode = 'saveName',
+    maxIndex,
+  }) => {
     const { begin, end, name } = sequence;
 
-    const targetFrames = images.filter(({ saveName }) => {
-      const frameIdx = parseFloat(saveName.replace(/[^0-9]/g, ''));
+    let targetFrames;
 
-      return frameIdx >= begin && frameIdx <= end;
-    });
+    switch (indexMode) {
+      case 'arrayIndex': {
+        const refinedBegin = Math.ceil(
+          (parseInt(begin, 10) / maxIndex) * images.length
+        );
+        const refinedEnd = Math.ceil(
+          (parseInt(end, 10) / maxIndex) * images.length
+        );
+        targetFrames = images.slice(refinedBegin, refinedEnd);
+
+        break;
+      }
+      default: {
+        targetFrames = images.filter(({ saveName }) => {
+          const frameIdx = parseFloat(saveName.replace(/[^0-9]/g, ''));
+
+          return frameIdx >= begin && frameIdx <= end;
+        });
+      }
+    }
 
     this.createGifFromFrames(targetFrames, `${destPath}/${name}.gif`, {
       delay,
@@ -297,7 +322,7 @@ export default class WfFileReader {
     let targetImages = [];
     const images = await Promise.all(
       atlases.map(async (args) => {
-        const { n: name, w, h, x, y, r, fx, fy, fw, fh } = args;
+        const { n: name, w, h, x, y, r } = args;
         let imageBuffer;
         let isDuplicated;
         let cacheResolver;
@@ -331,7 +356,14 @@ export default class WfFileReader {
 
           cacheResolver(imageBuffer);
         }
-        const saveName = `${name.split('/').pop()}.png`;
+        const frameId = name.split('/').pop();
+        let saveNameRoot = frameId;
+
+        if (!/[0-9]/.test(frameId)) {
+          saveNameRoot = frameId.padStart(4, '0');
+        }
+
+        const saveName = `${saveNameRoot}.png`;
 
         if (begin && end) {
           const frameSqeunce = parseFloat(saveName.replace(/[^0-9]/g, ''));
@@ -339,13 +371,14 @@ export default class WfFileReader {
             targetImages.push({
               frame: imageBuffer,
               saveName,
+              frameId,
               ...args,
               duplicated: isDuplicated,
             });
           }
         }
 
-        if (!isDuplicated) {
+        if (!isDuplicated || true) {
           await mkdir(destPath, { recursive: true });
 
           await writeFile(path.join(destPath, saveName), imageBuffer);
@@ -355,6 +388,7 @@ export default class WfFileReader {
           frame: imageBuffer,
           ...args,
           saveName,
+          frameId,
           duplicated: isDuplicated,
         };
       })
@@ -402,6 +436,25 @@ export default class WfFileReader {
     );
   };
 
+  writeWfAsset = async (assetPath, data) => {
+    const outputPath = `${this._rootDir}/output/assets/${assetPath}`;
+
+    return writeFileRecursive(outputPath, data);
+  };
+
+  readMp3AndGenerateOutput = async (
+    filePath,
+    savePath,
+    { rootDir = this._rootDir } = {}
+  ) => {
+    const restoredMp3 = await restoreCorruptedMp3(filePath, savePath);
+
+    return writeFileRecursive(
+      `${rootDir}/output/assets/${savePath}`,
+      restoredMp3
+    );
+  };
+
   getAssetsFromAsFiles = async (asFiles) => {
     const possibleFilePaths = {};
 
@@ -427,9 +480,7 @@ export default class WfFileReader {
       });
       const asFileContent = await readFile(asFilePath);
       Array.from(
-        asFileContent
-          .toString('utf-8')
-          .matchAll(/[a-zA-Z_0-9]+?\/[a-zA-Z_0-9\/]+/g)
+        asFileContent.toString('utf-8').matchAll(POSSIBLE_PATH_REGEX)
       ).forEach(([possiblePath]) => { // eslint-disable-line
         rawCount += 1;
         possibleFilePaths[possiblePath] = true;
@@ -525,11 +576,11 @@ export default class WfFileReader {
         .replace(/\\"\]/g, '"]')
         .replace(/\\",\\"/g, '","');
 
-      Array.from(
-        stringifiedJson.matchAll(/[a-zA-Z_0-9]+?\/[a-zA-Z_0-9\/]+/g)
-      ).forEach(([possiblePath]) => {
-        possibleFilePaths[possiblePath] = true;
-      });
+      Array.from(stringifiedJson.matchAll(POSSIBLE_PATH_REGEX)).forEach(
+        ([possiblePath]) => {
+          possibleFilePaths[possiblePath] = true;
+        }
+      );
       const jsonFilePath = `${fileRootName}.json`;
       logger.devLog(`Exporting orderedmap to JSON ${jsonFilePath}`);
       await writeFileRecursive(jsonFilePath, stringifiedJson);

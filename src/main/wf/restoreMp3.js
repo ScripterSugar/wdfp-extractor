@@ -1,4 +1,5 @@
 const { readFile, writeFile } = require('fs/promises');
+const iconv = require('iconv-lite');
 
 const hexesToBin = (hexString) => {
   return hexString
@@ -170,10 +171,8 @@ const FREQUENCY = {
 };
 
 const calculateFrameSize = (binaryHeader) => {
-  const syncBits = binaryHeader.slice(0, 11);
   const mpegVersion = VERSION[binaryHeader.slice(11, 13)];
   const layer = LAYER[binaryHeader.slice(13, 15)];
-  const crc = binaryHeader.slice(15, 16);
   const bitrate =
     parseFloat(
       BITRATE_INDEX[binaryHeader.slice(16, 20)][
@@ -182,33 +181,71 @@ const calculateFrameSize = (binaryHeader) => {
     ) * 1000;
   const frequency = FREQUENCY[mpegVersion][binaryHeader.slice(20, 22)];
   const padding = parseFloat(binaryHeader.slice(22, 23));
-  const private = binaryHeader.slice(23, 24);
-  const channelMode = binaryHeader.slice(24, 26);
-  const modeExt = binaryHeader.slice(26, 28);
-  const copyright = binaryHeader.slice(28, 29);
-  const original = binaryHeader.slice(29, 30);
-  const emphasis = binaryHeader.slice(30, 32);
 
   return Math.floor((bitrate * 144) / frequency + padding);
 };
 
-const restoreCorruptedMp3 = async (filePath, destPath) => {
-  const file = await readFile(filePath);
+const spliceBuffer = (buffer, targetIndex, deleteCount, ...items) => {
+  const bufferArray = Array.from(buffer);
 
-  let byteIndex = file.toString('hex').indexOf('7ff') / 2;
+  bufferArray.splice(targetIndex, deleteCount, ...items);
 
-  while (byteIndex <= file.byteLength) {
-    file[byteIndex] = 255;
+  return Buffer.from(bufferArray);
+};
+
+const restoreCorruptedMp3 = async (filePath, debug) => {
+  let file = await readFile(filePath);
+
+  const hexString = file.toString('hex');
+  if (hexString.slice(0, 6) === '494433') {
+    // ID3V2
+    const tit2Index = hexString.indexOf('54495432');
+    if (tit2Index !== -1 && tit2Index < 1024) {
+      const sizeByteIndex = (tit2Index + 8) / 2;
+      const encodingByteIndex = (tit2Index + 20) / 2;
+      const tit2Size = parseInt(
+        hexString.slice(tit2Index + 8, tit2Index + 16),
+        16
+      );
+      const shiftJisTitle = file.slice(
+        tit2Index / 2 + 11,
+        tit2Index / 2 + 11 + tit2Size - 1
+      );
+      const decodedTitle = iconv.decode(shiftJisTitle, 'SHIFT_JIS');
+      const utf8Title = iconv.encode(decodedTitle, 'utf-16');
+      file[encodingByteIndex] = 1;
+      utf8Title.length
+        .toString(16)
+        .padStart(8, '0')
+        .match(/.{2}/g)
+        .map((hex) => parseInt(hex, 16))
+        .forEach((sizeByte, idx) => {
+          file[sizeByteIndex + idx] = sizeByte;
+        });
+
+      try {
+        if (tit2Size > 1024) throw Error('TOO LARGE TIT2');
+        file = spliceBuffer(file, tit2Index / 2 + 11, tit2Size, ...utf8Title);
+      } catch (err) {
+        console.log(debug, tit2Index, tit2Size);
+      }
+    }
+  }
+
+  let byteIndex = file.toString('hex').indexOf('7ffb') / 2;
+
+  while (byteIndex < file.byteLength) {
     const header = file.slice(byteIndex, byteIndex + 4).toString('hex');
-    const binaryHeader = parseInt(header, 16).toString(2);
-    if (!/^ff/.test(header)) {
+    const binaryHeader = hexesToBin(header);
+    if (!/^7f/.test(header)) {
       break;
     }
+    file[byteIndex] = 255;
     const frameSize = calculateFrameSize(binaryHeader);
     byteIndex += frameSize;
   }
 
-  await writeFile('./battle_start_0.mp3', file);
+  return file;
 };
 
 module.exports = {

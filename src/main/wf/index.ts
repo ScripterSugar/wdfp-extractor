@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import rimraf from 'rimraf';
 import { app } from 'electron';
 import { ChildProcess, spawn } from 'child_process';
-import { readdir, readFile } from 'fs/promises';
+import { readdir, readFile, writeFile } from 'fs/promises';
 import WfFileReader from './wfFileReader';
 import logger from './logger';
 import { LSResult, WFExtractorMetaData } from './typedefs';
@@ -25,6 +25,7 @@ import {
 import {
   CHARACTER_AMF_PRESERTS,
   CHARACTER_SPRITE_PRESETS,
+  CHARACTER_VOICE_PRESETS,
   DATEFORMAT_A,
   MERGEABLE_PATH_PREFIXES,
   NOX_PORT_LIST,
@@ -672,24 +673,47 @@ class WfExtractor {
     }
 
     if (!this.filePaths?.length) {
-      throw new Error('FAILED_TO_LOAD_Paths');
+      throw new Error('FAILED_TO_LOAD_PATHS');
+    }
+  };
+
+  loadAsFilePaths = async () => {
+    if (this.asFilePaths) {
+      return;
+    }
+
+    try {
+      const loadedAsFilePaths = JSON.parse(
+        (await readFile(`${this.ROOT_PATH}/asFilePaths.lock`)).toString()
+      );
+      this.asFilePaths = loadedAsFilePaths;
+    } catch (err) {
+      console.log(err);
+    }
+
+    if (!this.asFilePaths?.length) {
+      this.asFilePaths = [];
     }
   };
 
   characterListCache = null;
 
-  getCharacterList = async () => {
+  getCharacterList = async ({ raw }: { raw: boolean } = {}) => {
     if (this.characterListCache) return this.characterListCache;
 
-    let characters = Object.values(
-      JSON.parse(
-        (
-          await asyncReadFile(
-            `${this.ROOT_PATH}/output/orderedmap/character/character.json`
-          )
-        ).toString()
-      )
-    ).map(([name]) => name);
+    const characterData = JSON.parse(
+      (
+        await asyncReadFile(
+          `${this.ROOT_PATH}/output/orderedmap/character/character.json`
+        )
+      ).toString()
+    );
+
+    if (raw) {
+      return characterData;
+    }
+
+    let characters = Object.values(characterData).map(([name]) => name);
 
     characters.push(
       ...Object.keys(
@@ -710,7 +734,7 @@ class WfExtractor {
     return characters;
   };
 
-  extractImageAssets = async () => {
+  extractCharacterImageAssets = async () => {
     logger.log('Start extracting character image assets...');
 
     const characters = await this.getCharacterList();
@@ -738,62 +762,105 @@ class WfExtractor {
 
     const characterImagePaths = [];
 
-    let count = 0;
-    logger.data({
-      type: 'progressStart',
-      data: {
-        id: 'Generating digests for possible assets...',
-        max: characterImageDigests.length,
-      },
+    const digestTracker = logger.progressStart({
+      id: 'Generating digests for possible assets...',
+      max: characterImageDigests.length,
     });
     for (const [fileName, digest] of characterImageDigests) {
-      count += 1;
-      logger.data({
-        type: 'progress',
-        data: {
-          id: 'Generating digests for possible assets...',
-          progress: count,
-        },
-      });
+      digestTracker.progress();
       const filePath = await this.fileReader.checkDigestPath(digest);
         if (!filePath) continue; // eslint-disable-line
       characterImagePaths.push([fileName, filePath]);
     }
-    logger.data({
-      type: 'progressEnd',
-      data: {
-        id: 'Generating digests for possible assets...',
-      },
-    });
+    digestTracker.end();
 
-    count = 0;
-    logger.data({
-      type: 'progressStart',
-      data: {
-        id: 'Exporting character image assets...',
-        max: characterImagePaths.length,
-      },
+    const imageTracker = logger.progressStart({
+      id: 'Exporting character image assets...',
+      max: characterImagePaths.length,
     });
     for (const [fileName, filePath] of characterImagePaths) {
-      count += 1;
-      logger.data({
-        type: 'progress',
-        data: {
-          id: 'Exporting character image assets...',
-          progress: count,
-        },
-      });
+      imageTracker.progress();
       await this.fileReader.readPngAndGenerateOutput(filePath, fileName);
     }
-    logger.data({
-      type: 'progressEnd',
-      data: {
-        id: 'Exporting character image assets...',
-      },
-    });
+    imageTracker.end();
     logger.log('Exporting sprite atlases & frames...');
 
     logger.log('Successfully extracted character image assets.');
+  };
+
+  extractCharacterVoiceAssets = async () => {
+    const characterMap = await this.getCharacterList({ raw: true });
+    const characterSpeeches = JSON.parse(
+      (
+        await asyncReadFile(
+          `${this.ROOT_PATH}/output/orderedmap/character/character_speech.json`
+        )
+      ).toString()
+    );
+
+    const speechEntries = Object.entries(characterSpeeches);
+
+    logger.log('Start extracting character voice assets.');
+    const tracker = logger.progressStart({
+      id: 'Extracting character voice assets...',
+      max: speechEntries.length,
+    });
+
+    for (const [characterId, speechesRaw] of speechEntries) {
+      tracker.progress();
+      const characterData = characterMap[characterId];
+      const speeches = speechesRaw.slice(3);
+      if (!characterData) continue;
+
+      const [name] = characterData;
+
+      const voiceAssetPaths = CHARACTER_VOICE_PRESETS.map((preset) =>
+        preset(name)
+      );
+      const voiceLineTexts = {};
+
+      speeches.forEach((speech, idx) => {
+        if (POSSIBLE_PATH_REGEX.test(speech)) {
+          speech.split('\\n').forEach((speechPath) => {
+            if (speechPath.includes('/')) {
+              voiceAssetPaths.push(`character/${name}/voice/${speechPath}.mp3`);
+            }
+          });
+        } else if (speech.length > 5) {
+          const voiceTitle = speeches[idx + 1]?.split('\\n')?.[0];
+          if (voiceTitle) {
+            voiceLineTexts[voiceTitle] = speech;
+          }
+        }
+      });
+
+      const dedupedVoiceAssetPaths = [...new Set(voiceAssetPaths)];
+
+      const pathDigests = (
+        await Promise.all(
+          dedupedVoiceAssetPaths.map(async (voicePath) => {
+            const digest = digestWfFileName(voicePath);
+            const digestPath = await this.fileReader.checkDigestPath(digest);
+
+            if (!digestPath) return null;
+
+            return [voicePath, digestPath];
+          })
+        )
+      ).filter((v) => v);
+
+      await this.fileReader.writeWfAsset(
+        `character/${name}/voice/voiceLines.json`,
+        JSON.stringify(voiceLineTexts, null, 4)
+      );
+
+      for (const [fileName, filePath] of pathDigests) {
+        await this.fileReader.readMp3AndGenerateOutput(filePath, fileName);
+      }
+    }
+
+    tracker.end();
+    logger.log('Extracted character voice assets.');
   };
 
   extractCharacterSpriteMetaDatas = async () => {
@@ -841,61 +908,79 @@ class WfExtractor {
     });
   };
 
+  processSpritesByAtlases = async (
+    spritePath,
+    { animate, fileRoot, timelineRoot } = {}
+  ) => {
+    const sheetName = fileRoot || 'sprite_sheet';
+    const timelineName = timelineRoot || 'pixelart';
+
+    const spriteImage = await asyncReadFile(`${spritePath}/${sheetName}.png`);
+    const spriteAtlases = JSON.parse(
+      (await asyncReadFile(`${spritePath}/${sheetName}.atlas.json`)).toString()
+    );
+    const images = await this.fileReader.cropSpritesFromAtlas({
+      sprite: spriteImage,
+      atlases: spriteAtlases,
+      destPath: `${spritePath}/${sheetName}`,
+    });
+
+    if (!images) return;
+
+    if (animate) {
+      let timeline;
+
+      try {
+        timeline = JSON.parse(
+          (
+            await asyncReadFile(`${spritePath}/${timelineName}.timeline.json`)
+          ).toString()
+        );
+      } catch (err) {
+        console.log(err, `${spritePath}/${timelineName}.timeline.json`);
+        return;
+      }
+      await asyncMkdir(`${spritePath}/animated`, { recursive: true });
+
+      const indexMode = images[0].frameId.replace(/[^0-9]/g, '').length
+        ? 'saveName'
+        : 'arrayIndex';
+      let maxSequenceIndex;
+      if (indexMode === 'arrayIndex') {
+        maxSequenceIndex = Math.max(
+          ...timeline.sequences.map((sequence) => parseInt(sequence.end, 10))
+        );
+      }
+
+      for (const sequence of timeline.sequences) {
+        await this.fileReader.createGifFromSequence({
+          images,
+          sequence,
+          destPath: `${spritePath}/animated`,
+          delay: 100,
+          indexMode,
+          maxIndex: maxSequenceIndex,
+        });
+      }
+    }
+  };
+
   generateAnimatedSprites = async () => {
     logger.log('Cropping character sprites & generating animated GIFs...');
     const characters = await this.getCharacterList();
 
-    logger.data({
-      type: 'progressStart',
-      data: {
-        id: 'Processing Character Sprites...',
-        max: characters.length,
-      },
+    const tracker = logger.progressStart({
+      id: 'Processing Character Sprites...',
+      max: characters.length,
     });
 
-    let count = 0;
-
     for (const character of characters) {
-      count += 1;
       try {
         if (!this.metadata.spriteProcessedLock?.includes(character)) {
-          await asyncMkdir(
-            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated`,
-            { recursive: true }
+          await this.processSpritesByAtlases(
+            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart`,
+            { animate: true }
           );
-
-          const spriteImage = await asyncReadFile(
-            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/sprite_sheet.png`
-          );
-          const spriteAtlases = JSON.parse(
-            (
-              await asyncReadFile(
-                `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/sprite_sheet.atlas.json`
-              )
-            ).toString()
-          );
-          const timeline = JSON.parse(
-            (
-              await asyncReadFile(
-                `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/pixelart.timeline.json`
-              )
-            ).toString()
-          );
-
-          const images = await this.fileReader.cropSpritesFromAtlas({
-            sprite: spriteImage,
-            atlases: spriteAtlases,
-            destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/sprite_sheet`,
-          });
-
-          for (const sequence of timeline.sequences) {
-            await this.fileReader.createGifFromSequence({
-              images,
-              sequence,
-              destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated`,
-              delay: 100,
-            });
-          }
           await this.markMetaData({
             spriteProcessedLock: [
               ...(this.metadata.spriteProcessedLock || []),
@@ -939,22 +1024,11 @@ class WfExtractor {
         }
         continue;
       } finally {
-        logger.data({
-          type: 'progress',
-          data: {
-            id: 'Processing Character Sprites...',
-            progress: count,
-          },
-        });
+        tracker.progress();
       }
     }
 
-    logger.data({
-      type: 'progressEnd',
-      data: {
-        id: 'Processing Character Sprites...',
-      },
-    });
+    tracker.end();
     logger.log('Successfully cropped and saved all character sprites.');
   };
 
@@ -983,53 +1057,244 @@ class WfExtractor {
 
     this.asFilePaths = asFilePaths;
 
-    console.log(asFilePaths);
+    await writeFile(
+      `${this.ROOT_PATH}/asFilePaths.lock`,
+      JSON.stringify(asFilePaths)
+    );
   };
 
-  development = async () => {
-    return this.buildAsFilePaths();
-
-    await this.loadFilePaths();
-    await this.buildDigestFileMap();
-
+  extractPossibleAssets = async () => {
     const possibleImageAssets = [];
     const possibleAudioAssets = [];
-    const possibleAMF3Files = [];
-    const possibleXMLFiles = [];
-    const possibleHTMLFiles = [];
+    const possibleAmfAssets = [];
 
-    for (const filePath of this.filePaths) {
+    const sprites = {};
+
+    for (const filePath of [
+      ...new Set([...this.asFilePaths, ...this.filePaths]),
+    ]) {
       const pngDigest = await digestWfFileName(`${filePath}.png`);
-      if (await this.fileReader.checkDigestPath(pngDigest)) {
-        possibleImageAssets.push([`${filePath}.png`, pngDigest]);
-        continue;
+      const pngDigestPath = await this.fileReader.checkDigestPath(pngDigest);
+      if (pngDigestPath) {
+        possibleImageAssets.push([`${filePath}.png`, pngDigestPath]);
+      }
+      const spriteDigest = await digestWfFileName(
+        `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.png`
+      );
+      const spriteDigestPath = await this.fileReader.checkDigestPath(
+        spriteDigest
+      );
+      if (spriteDigestPath) {
+        possibleImageAssets.push([
+          `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.png`,
+          spriteDigestPath,
+        ]);
       }
       const mp3Digest = await digestWfFileName(`${filePath}.mp3`);
-      if (await this.fileReader.checkDigestPath(mp3Digest)) {
-        possibleAudioAssets.push([`${filePath}.mp3`, mp3Digest]);
-        continue;
-      }
-      const amf3Digest = await digestWfFileName(`${filePath}.amf3.delate`);
-      if (await this.fileReader.checkDigestPath(amf3Digest)) {
-        possibleAMF3Files.push([`${filePath}.amf3.delate`, amf3Digest]);
-        continue;
-      }
-      const xmlDigest = await digestWfFileName(`${filePath}.xml.delate`);
-      if (await this.fileReader.checkDigestPath(xmlDigest)) {
-        possibleXMLFiles.push([`${filePath}.xml.delate`, xmlDigest]);
-        continue;
-      }
-      const htmlDigest = await digestWfFileName(`${filePath}.html.delate`);
-      if (await this.fileReader.checkDigestPath(htmlDigest)) {
-        possibleHTMLFiles.push([`${filePath}.html.delate`, xmlDigest]);
-        continue;
+      const mp3DigestPath = await this.fileReader.checkDigestPath(mp3Digest);
+      if (mp3DigestPath) {
+        possibleAudioAssets.push([`${filePath}.mp3`, mp3DigestPath]);
       }
     }
-    console.log(possibleImageAssets);
-    console.log(possibleAudioAssets);
-    console.log(possibleAMF3Files);
-    console.log(possibleXMLFiles);
-    console.log(possibleHTMLFiles);
+
+    const fileNameMap = {};
+
+    const amf3Tracker = logger.progressStart({
+      id: 'Searching for possible atlases...',
+      max: possibleImageAssets.length,
+    });
+    for (const [imagePath] of possibleImageAssets) {
+      amf3Tracker.progress();
+      const fileName = imagePath.split('/').pop();
+      const fileNameRoot = fileName.replace('.png', '');
+      const parentPath = `${this.ROOT_PATH}/output/assets/${imagePath.replace(
+        `/${fileName}`,
+        ''
+      )}`;
+
+      fileNameMap[parentPath] = fileNameRoot;
+
+      const atlasPath = imagePath.replace(
+        fileName,
+        `${fileNameRoot}.atlas.amf3.deflate`
+      );
+      const framePath = imagePath.replace(
+        fileName,
+        'pixelart.frame.amf3.deflate'
+      );
+      const frame2Path = imagePath.replace(
+        fileName,
+        `${fileNameRoot}.frame.amf3.deflate`
+      );
+      const timelinePath = imagePath.replace(
+        fileName,
+        'pixelart.timeline.amf3.deflate'
+      );
+      const timeline2Path = imagePath.replace(
+        fileName,
+        `${fileNameRoot}.timeline.amf3.deflate`
+      );
+      const atfPath = imagePath.replace(
+        fileName,
+        `${fileNameRoot}.atf.deflate`
+      );
+
+      const atlasDigest = await digestWfFileName(atlasPath);
+      const frameDigest = await digestWfFileName(framePath);
+      const frame2Digest = await digestWfFileName(frame2Path);
+      const timelineDigest = await digestWfFileName(timelinePath);
+      const timeline2Digest = await digestWfFileName(timeline2Path);
+      const atfDigest = await digestWfFileName(atfPath);
+
+      const atlasDigestPath = await this.fileReader.checkDigestPath(
+        atlasDigest
+      );
+      const frameDigestPath = await this.fileReader.checkDigestPath(
+        frameDigest
+      );
+      const frame2DigestPath = await this.fileReader.checkDigestPath(
+        frame2Digest
+      );
+      const timelineDigestPath = await this.fileReader.checkDigestPath(
+        timelineDigest
+      );
+      const timeline2DigestPath = await this.fileReader.checkDigestPath(
+        timeline2Digest
+      );
+      const atfDigestPath = await this.fileReader.checkDigestPath(atfDigest);
+      if (frameDigestPath) {
+        possibleAmfAssets.push([framePath, frameDigestPath]);
+      }
+      if (frame2DigestPath) {
+        possibleAmfAssets.push([frame2Path, frame2DigestPath]);
+      }
+      if (atlasDigestPath) {
+        sprites[parentPath] = 'sprite';
+        possibleAmfAssets.push([atlasPath, atlasDigestPath]);
+      }
+      if (timelineDigestPath) {
+        sprites[parentPath] = 'animated';
+        possibleAmfAssets.push([timelinePath, timelineDigestPath]);
+      }
+      if (timeline2DigestPath) {
+        sprites[parentPath] = 'animated_2';
+        possibleAmfAssets.push([timeline2Path, timeline2DigestPath]);
+      }
+      if (atfDigestPath) {
+        sprites[parentPath] = 'animated';
+        possibleAmfAssets.push([atfPath, atfDigestPath]);
+      }
+      if (this.__debug) {
+        const debugPath = imagePath.replace(
+          fileName,
+          `${this.__debug.replace(/\$rootname/, fileNameRoot)}`
+        );
+        const debugDigest = await digestWfFileName(debugPath);
+        const debugDigestPath = await this.fileReader.checkDigestPath(
+          debugDigest
+        );
+        if (debugDigestPath) {
+          sprites[parentPath] = 'animated_2';
+          possibleAmfAssets.push([debugPath, debugDigestPath]);
+        }
+      }
+    }
+    amf3Tracker.end();
+
+    const imageTracker = logger.progressStart({
+      id: 'Extracting general image assets...',
+      max: possibleImageAssets.length,
+    });
+    for (const [fileName, filePath] of possibleImageAssets) {
+      imageTracker.progress();
+      await this.fileReader.readPngAndGenerateOutput(filePath, fileName);
+    }
+    imageTracker.end();
+
+    const amfAssetTracker = logger.progressStart({
+      id: 'Extracting deflated generals...',
+      max: possibleAmfAssets.length,
+    });
+    for (const [fileName, filePath] of possibleAmfAssets) {
+      amfAssetTracker.progress();
+      await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
+    }
+    amfAssetTracker.end();
+
+    return;
+
+    let processedSprites = {};
+
+    try {
+      processedSprites = JSON.parse(
+        (await readFile(`${this.ROOT_PATH}/sprites.lock`)).toString()
+      );
+    } catch (err) {
+      console.log(err);
+    }
+
+    const spriteEntries = Object.entries(sprites);
+    const spriteTracker = logger.progressStart({
+      id: 'Rendering sprites from atlases...',
+      max: spriteEntries.length,
+    });
+    let count = 0;
+    for (const [spritePath, type] of spriteEntries) {
+      spriteTracker.progress();
+      count += 1;
+      if (
+        processedSprites[spritePath] === type &&
+        !/\/battle\/boss\/administrator/.test(spritePath)
+      )
+        continue;
+      try {
+        await this.processSpritesByAtlases(spritePath, {
+          animate: /animated/.test(type),
+          fileRoot: fileNameMap[spritePath],
+          timelineRoot: type === 'animated_2' ? fileNameMap[spritePath] : '',
+        });
+        processedSprites[spritePath] = type;
+      } catch (err) {
+        console.log(err);
+      }
+
+      if (!(count % 10)) {
+        await writeFile(
+          `${this.ROOT_PATH}/sprites.lock`,
+          JSON.stringify(processedSprites, null, 2)
+        );
+      }
+    }
+    await writeFile(
+      `${this.ROOT_PATH}/sprites.lock`,
+      JSON.stringify(processedSprites, null, 2)
+    );
+    spriteTracker.end();
+
+    const audioTracker = logger.progressStart({
+      id: 'Extracting audio assets...',
+      max: possibleAudioAssets.length,
+    });
+    for (const [fileName, filePath] of possibleAudioAssets) {
+      audioTracker.progress();
+      await this.fileReader.readMp3AndGenerateOutput(filePath, fileName);
+    }
+    audioTracker.end();
+  };
+
+  development = async (debug) => {
+    await this.init();
+    await this.buildDigestFileMap();
+    // await this.extractMasterTable();
+    // await this.buildAsFilePaths();
+    await this.loadFilePaths();
+    await this.loadAsFilePaths();
+
+    this.__debug = debug;
+
+    // return this.extractCharacterSpriteMetaDatas();
+
+    return this.extractPossibleAssets();
   };
 
   close = async () => {

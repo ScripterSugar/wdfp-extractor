@@ -72,16 +72,26 @@ ipcMain.on(
   async (
     event,
     rootDir,
-    { region, extractMaster, extractImage, processAtlas, swfMode = 'full' }
+    {
+      region,
+      extractMaster,
+      extractImage,
+      processAtlas,
+      swfMode = 'full',
+      debug,
+    }
   ) => {
     let replyPacket;
     let extractionPhase = 0;
 
     const wfExtractor = new WfExtractor({ region, rootDir, swfMode });
 
-    await wfExtractor.development();
+    if (debug) {
+      await wfExtractor.development(debug);
 
-    return event.reply('extractionResponseMain', { success: true });
+      event.reply('extractionResponseMain', { success: true });
+      return;
+    }
 
     while (replyPacket !== 'done') {
       console.log(`TRYING EXTRACTION, Current Phase ${extractionPhase}`);
@@ -135,7 +145,7 @@ ipcMain.on(
 
         if (extractionPhase <= 6) {
           if (extractImage) {
-            await wfExtractor.extractImageAssets();
+            await wfExtractor.extractCharacterImageAssets();
 
             if (processAtlas) {
               await wfExtractor.extractCharacterSpriteMetaDatas();

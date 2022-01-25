@@ -124,14 +124,35 @@ export const CHARACTER_SPRITE_PRESETS = [
 export const CHARACTER_AMF_PRESERTS = [
   (character) => `character/${character}/pixelart/pixelart.frame.amf3.deflate`,
   (character) =>
+    `character/${character}/pixelart/sprite_sheet.parts.amf3.deflate`,
+  (character) =>
     `character/${character}/pixelart/pixelart.timeline.amf3.deflate`,
   (character) => `character/${character}/pixelart/special.frame.amf3.deflate`,
+  (character) =>
+    `character/${character}/pixelart/special_sprite_sheet.parts.amf3.deflate`,
   (character) =>
     `character/${character}/pixelart/special.timeline.amf3.deflate`,
   (character) =>
     `character/${character}/pixelart/special_sprite_sheet.atlas.amf3.deflate`,
   (character) =>
     `character/${character}/pixelart/sprite_sheet.atlas.amf3.deflate`,
+];
+
+export const POSSIBLE_PATH_REGEX = /[.a-zA-Z_0-9]+?\/[.a-zA-Z_0-9\/]+/g;
+export const CHARACTER_VOICE_PRESETS = [
+  (character) => `character/${character}/voice/ally/evolution.mp3`,
+  (character) => `character/${character}/voice/ally/join.mp3`,
+  (character) => `character/${character}/voice/battle/battle_start_0.mp3`,
+  (character) => `character/${character}/voice/battle/battle_start_1.mp3`,
+  (character) => `character/${character}/voice/battle/outhole_0.mp3`,
+  (character) => `character/${character}/voice/battle/outhole_1.mp3`,
+  (character) => `character/${character}/voice/battle/power_flip_0.mp3`,
+  (character) => `character/${character}/voice/battle/power_flip_1.mp3`,
+  (character) => `character/${character}/voice/battle/skill_0.mp3`,
+  (character) => `character/${character}/voice/battle/skill_1.mp3`,
+  (character) => `character/${character}/voice/battle/skill_ready.mp3`,
+  (character) => `character/${character}/voice/battle/win_0.mp3`,
+  (character) => `character/${character}/voice/battle/win_1.mp3`,
 ];
 
 export const NOX_PORT_LIST = [62001, 62025];

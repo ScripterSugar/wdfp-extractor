@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "fkill": "7.2.1",
+    "iconv-lite": "^0.6.3",
     "sharp": "^0.29.3"
   },
   "license": "MIT"

@@ -221,6 +221,7 @@ const AppContent = () => {
       extractImage: true,
       processAtlas: false,
       region: 'gl',
+      debug: '',
     },
     'EXTRACT_OPTION',
     (val) => {
@@ -656,6 +657,16 @@ const AppContent = () => {
               />
             </LayoutFlexSpaceBetween>
           </LayoutFlexDivideHalf>
+          <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
+            <Typography style={{ flexShrink: 0, marginRight: 16 }}>
+              Debug String
+            </Typography>
+            <input
+              style={{ width: '100%' }}
+              value={options.debug}
+              onChange={(event) => onChangeOptions('debug', event.target.value)}
+            />
+          </LayoutFlexSpaceBetween>
         </LayoutFlexColumn>
         <IndicatorTypo style={{ marginTop: 16, marginLeft: 4 }}>
           APK region (version)

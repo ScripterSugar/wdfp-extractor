@@ -56,6 +56,39 @@ class Logger {
     }
   };
 
+  progressStart = ({ id, max }) => {
+    this.data({
+      type: 'progressStart',
+      data: {
+        id,
+        max,
+      },
+    });
+
+    let count = 0;
+
+    return {
+      progress: () => {
+        count += 1;
+        this.data({
+          type: 'progress',
+          data: {
+            id,
+            progress: count,
+          },
+        });
+      },
+      end: () => {
+        this.data({
+          type: 'progressEnd',
+          data: {
+            id,
+          },
+        });
+      },
+    };
+  };
+
   devLog = (...args) => {
     if (process.env.IS_DEBUG === 'true') {
       console.log(...args);
