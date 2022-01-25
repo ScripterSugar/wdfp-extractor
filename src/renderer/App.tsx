@@ -221,6 +221,7 @@ const AppContent = () => {
       extractCharacterImage: true,
       extractMiscImage: true,
       extractAudio: true,
+      extractAllFrames: false,
       customPort: '',
       processAtlas: false,
       region: 'gl',
@@ -461,6 +462,8 @@ const AppContent = () => {
       devLogRef.current?.scrollTo(0, devLogRef.current?.scrollHeight);
     });
 
+    onChangeOptions('isDebug', false);
+
     (async () => {
       const ipcReturn = getIpcReturn('appVersion');
 
@@ -582,7 +585,7 @@ const AppContent = () => {
         <img
           src={theoSpecial}
           onClick={() => {
-            onChangeOptions('isDebug', true);
+            onChangeOptions('isDebug', !options.isDebug);
             window.electron.ipcRenderer.openDevTools();
           }}
           alt="theo"
@@ -672,10 +675,10 @@ const AppContent = () => {
           </LayoutFlexDivideHalf>
           <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
             <LayoutFlexSpaceBetween>
-              <Typography>Extract general image assets</Typography>
-              <IndicatorTypo>
-                Images of items, bosses, ui, status and more.
-              </IndicatorTypo>
+              <LayoutFlexColumn>
+                <Typography>Extract general image assets</Typography>
+                <IndicatorTypo>Images of items, bosses, ui, etc.</IndicatorTypo>
+              </LayoutFlexColumn>
               <Switch
                 value={options.extractMiscImage}
                 onClick={() =>
@@ -688,7 +691,7 @@ const AppContent = () => {
                 <Typography>Extract audio assets</Typography>
                 <IndicatorTypo>Voiceline, BGM, S/E</IndicatorTypo>
               </LayoutFlexColumn>
-              <switch
+              <Switch
                 value={options.extractAudio}
                 onClick={() =>
                   onChangeOptions('extractAudio', !options.extractAudio)
@@ -696,22 +699,38 @@ const AppContent = () => {
               />
             </LayoutFlexSpaceBetween>
           </LayoutFlexDivideHalf>
-          <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
-            <LayoutFlexColumn>
-              <Typography>Custom emulator port</Typography>
-              <IndicatorTypo>
-                Specify your emulator port if needed
-              </IndicatorTypo>
-            </LayoutFlexColumn>
-            <input
-              style={{ width: '100%' }}
-              value={options.customPort}
-              onChange={(event) =>
-                onChangeOptions('customPort', event.target.value)
-              }
-            />
-          </LayoutFlexSpaceBetween>
-          {isDebug && (
+          <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
+            <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
+              <LayoutFlexColumn>
+                <Typography>Custom emulator port</Typography>
+                <IndicatorTypo>
+                  Specify your emulator port if needed
+                </IndicatorTypo>
+              </LayoutFlexColumn>
+              <input
+                style={{ width: 240 }}
+                value={options.customPort}
+                onChange={(event) =>
+                  onChangeOptions('customPort', event.target.value)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+            <LayoutFlexSpaceBetween>
+              <LayoutFlexColumn>
+                <Typography>Include duplicated frames for sprites</Typography>
+                <IndicatorTypo>
+                  This makes extraction process slower.
+                </IndicatorTypo>
+              </LayoutFlexColumn>
+              <Switch
+                value={options.extractAllFrames}
+                onClick={() =>
+                  onChangeOptions('extractAllFrames', !options.extractAllFrames)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+          </LayoutFlexDivideHalf>
+          {options.isDebug && (
             <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
               <Typography style={{ flexShrink: 0, marginRight: 16 }}>
                 Debug String

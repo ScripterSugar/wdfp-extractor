@@ -303,6 +303,7 @@ export default class WfFileReader {
     atlases,
     destPath,
     generateGif,
+    extractAll = false,
   } = {}) => {
     let needGenerateGif;
     let dest;
@@ -378,7 +379,7 @@ export default class WfFileReader {
           }
         }
 
-        if (!isDuplicated || true) {
+        if (!isDuplicated || extractAll) {
           await mkdir(destPath, { recursive: true });
 
           await writeFile(path.join(destPath, saveName), imageBuffer);

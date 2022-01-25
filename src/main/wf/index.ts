@@ -29,6 +29,7 @@ import {
   DATEFORMAT_A,
   MERGEABLE_PATH_PREFIXES,
   NOX_PORT_LIST,
+  POSSIBLE_PATH_REGEX,
 } from './constants';
 
 const RESOURCES_PATH = app.isPackaged
@@ -192,10 +193,15 @@ class WfExtractor {
     rootDir,
     customPort,
     swfMode,
+    extractAllFrames,
   }: { swfMode: 'simple' | 'full' } = {}) {
     this.metadata = {};
     this.swfMode = swfMode || 'simple';
     this.customPort = customPort;
+
+    this.options = {
+      extractAllFrames,
+    };
 
     this.setRootPath(rootDir || DEFAULT_ROOT_PATH);
     logger.log(`Target region set as ${region}`);
@@ -925,7 +931,7 @@ class WfExtractor {
 
   processSpritesByAtlases = async (
     spritePath,
-    { animate, fileRoot, timelineRoot } = {}
+    { animate, fileRoot, timelineRoot, extractAll } = {}
   ) => {
     const sheetName = fileRoot || 'sprite_sheet';
     const timelineName = timelineRoot || 'pixelart';
@@ -938,6 +944,7 @@ class WfExtractor {
       sprite: spriteImage,
       atlases: spriteAtlases,
       destPath: `${spritePath}/${sheetName}`,
+      extractAll,
     });
 
     if (!images) return;
@@ -994,7 +1001,7 @@ class WfExtractor {
         if (!this.metadata.spriteProcessedLock?.includes(character)) {
           await this.processSpritesByAtlases(
             `${this.ROOT_PATH}/output/assets/character/${character}/pixelart`,
-            { animate: true }
+            { animate: true, extractAll: this.options.extractAllFrames }
           );
           await this.markMetaData({
             spriteProcessedLock: [
@@ -1097,27 +1104,26 @@ class WfExtractor {
     const possibleAmfAssets = [];
 
     const sprites = {};
+    const fileNameMap = {};
 
     for (const filePath of [
       ...new Set([...this.asFilePaths, ...this.filePaths]),
     ]) {
       pushExist(
         possibleImageAssets,
-        this.digestAndCheckFilePath(`${filePath}.png`)
+        await this.digestAndCheckFilePath(`${filePath}.png`)
       );
       pushExist(
         possibleImageAssets,
-        this.digestAndCheckFilePath(
+        await this.digestAndCheckFilePath(
           `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.png`
         )
       );
       pushExist(
         possibleAudioAssets,
-        this.digestAndCheckFilePath(`${filePath}.mp3`)
+        await this.digestAndCheckFilePath(`${filePath}.mp3`)
       );
     }
-
-    const fileNameMap = {};
 
     const amf3Tracker = logger.progressStart({
       id: 'Searching for possible atlases...',
@@ -1132,28 +1138,25 @@ class WfExtractor {
         ''
       )}`;
       fileNameMap[parentPath] = fileNameRoot;
-      const atlasEntry = this.digestAndCheckFilePath(
+      const atlasEntry = await this.digestAndCheckFilePath(
         imagePath.replace(fileName, `${fileNameRoot}.atlas.amf3.deflate`)
       );
-      const pixelartFrameEntry = this.digestAndCheckFilePath(
+      const pixelartFrameEntry = await this.digestAndCheckFilePath(
         imagePath.replace(fileName, 'pixelart.frame.amf3.deflate')
       );
-      const frameEntry = this.digestAndCheckFilePath(
+      const frameEntry = await this.digestAndCheckFilePath(
         imagePath.replace(fileName, `${fileNameRoot}.frame.amf3.deflate`)
       );
-      const pixelArtTimelineEntry = this.digestAndCheckFilePath(
-        (timelinePath = imagePath.replace(
-          fileName,
-          'pixelart.timeline.amf3.deflate'
-        ))
+      const pixelArtTimelineEntry = await this.digestAndCheckFilePath(
+        imagePath.replace(fileName, 'pixelart.timeline.amf3.deflate')
       );
-      const timelineEntry = this.digestAndCheckFilePath(
+      const timelineEntry = await this.digestAndCheckFilePath(
         imagePath.replace(fileName, `${fileNameRoot}.timeline.amf3.deflate`)
       );
-      const partsEntry = this.digestAndCheckFilePath(
+      const partsEntry = await this.digestAndCheckFilePath(
         imagePath.replace(fileName, `${fileNameRoot}.parts.amf3.deflate`)
       );
-      const atfEntry = this.digestAndCheckFilePath(
+      const atfEntry = await this.digestAndCheckFilePath(
         imagePath.replace(fileName, `${fileNameRoot}.atf.deflate`)
       );
 
@@ -1174,7 +1177,7 @@ class WfExtractor {
         possibleAmfAssets.push(pixelArtTimelineEntry);
       }
       if (this.__debug) {
-        const debugEntry = this.digestAndCheckFilePath(
+        const debugEntry = await this.digestAndCheckFilePath(
           imagePath.replace(
             fileName,
             `${this.__debug.replace(/\$rootname/, fileNameRoot)}`
@@ -1190,6 +1193,7 @@ class WfExtractor {
       possibleAudioAssets,
       possibleAmfAssets,
       sprites,
+      fileNameMap,
     };
 
     return this.possibleAssetCache;
@@ -1210,7 +1214,7 @@ class WfExtractor {
   };
 
   extractPossibleImageAssets = async () => {
-    const { possibleImageAssets, possibleAmfAssets, sprites } =
+    const { possibleImageAssets, possibleAmfAssets, sprites, fileNameMap } =
       await this.loadPossibleAssets();
     const imageTracker = logger.progressStart({
       id: 'Extracting general image assets...',
@@ -1256,6 +1260,7 @@ class WfExtractor {
         await this.processSpritesByAtlases(spritePath, {
           // animate: /animated/.test(type),
           fileRoot: fileNameMap[spritePath],
+          extractAll: this.options.extractAllFrames,
           // timelineRoot: type === 'animated_2' ? fileNameMap[spritePath] : '',
         });
         processedSprites[spritePath] = type;
