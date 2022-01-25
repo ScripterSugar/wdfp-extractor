@@ -46,14 +46,14 @@ Simply just connect your device, select the directory you want to save your asse
 - Decompiled SWF
 - Master table
 - Character image assets
-- Character image atlases/frame/timeline (exported as json format)
+- Character image atlases/frame/parts/timeline (exported as json format)
+- Miscellaneous image assets.
+- Audio files including BGM, Character voice lines, S/E and more.
 - Cropped sprites based on atlases and sprite sheet
-- Animated images generated from sprites (speical / front_walk only)
+- Animated images generated from sprites (Character images only)
 
 ## Planned feature
 - Support extraction of ability texts
-- Support extraction of miscellaneous image assets
-- Support extraction of voice files
 - Data viewer
 
 ## Contributing
