@@ -41,6 +41,8 @@ To use this tool, your device should at least have file-listing access to the /d
 
 Simply just connect your device, select the directory you want to save your assets, and click on the Extract Data button.
 
+Once the extraction is done, you can find inflated asset files located in the output directory under your extraction directory.
+
 **Do not close the app even if it hangs. The process might hangs a lot and few tasks require more than dozens of minutes. Be patient while extraction is in progress**
 
 ## Supported Assets
