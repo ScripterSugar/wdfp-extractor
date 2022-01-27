@@ -1121,6 +1121,16 @@ class WfExtractor {
           `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.png`
         )
       );
+      const splittedPath = filePath.split('/');
+      splittedPath.pop();
+      const lastParent = splittedPath.pop();
+      splittedPath.push(lastParent);
+      splittedPath.push(lastParent);
+      const lastParentPath = splittedPath.join('/');
+      pushExist(
+        possibleImageAssets,
+        await this.digestAndCheckFilePath(`${lastParentPath}.png`)
+      );
       pushExist(
         possibleAudioAssets,
         await this.digestAndCheckFilePath(`${filePath}.mp3`)
@@ -1134,6 +1144,13 @@ class WfExtractor {
         await this.digestAndCheckFilePath(
           `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.atf.deflate`
         )
+      );
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      await writeFile(
+        `${this.ROOT_PATH}/dev_image_assets.json`,
+        JSON.stringify(possibleImageAssets, null, 2)
       );
     }
 
@@ -1176,6 +1193,7 @@ class WfExtractor {
       pushExist(possibleAmfAssets, frameEntry);
       pushExist(possibleAmfAssets, pixelartFrameEntry);
       pushExist(possibleAmfAssets, atfEntry);
+
       if (atlasEntry) {
         sprites[parentPath] = 'sprite';
         possibleAmfAssets.push(atlasEntry);
@@ -1225,7 +1243,9 @@ class WfExtractor {
     audioTracker.end();
   };
 
-  extractPossibleImageAssets = async () => {
+  extractPossibleImageAssets = async ({
+    cropSprites,
+  }: { cropSprites: boolean } = {}) => {
     const { possibleImageAssets, possibleAmfAssets, sprites, fileNameMap } =
       await this.loadPossibleAssets();
     const imageTracker = logger.progressStart({
@@ -1258,41 +1278,43 @@ class WfExtractor {
       console.log(err);
     }
 
-    const spriteEntries = Object.entries(sprites);
-    const spriteTracker = logger.progressStart({
-      id: 'Rendering sprites from atlases...',
-      max: spriteEntries.length,
-    });
-    let count = 0;
-    for (const [spritePath, type] of spriteEntries) {
-      spriteTracker.progress();
-      count += 1;
-      if (processedSprites[spritePath] === type) continue;
-      try {
-        await this.processSpritesByAtlases(spritePath, {
-          // animate: /animated/.test(type),
-          fileRoot: fileNameMap[spritePath],
-          extractAll: this.options.extractAllFrames,
-          // timelineRoot: type === 'animated_2' ? fileNameMap[spritePath] : '',
-        });
-        processedSprites[spritePath] = type;
-      } catch (err) {
-        console.log(err);
-      }
+    if (cropSprites) {
+      const spriteEntries = Object.entries(sprites);
+      const spriteTracker = logger.progressStart({
+        id: 'Rendering sprites from atlases...',
+        max: spriteEntries.length,
+      });
+      let count = 0;
+      for (const [spritePath, type] of spriteEntries) {
+        spriteTracker.progress();
+        count += 1;
+        if (processedSprites[spritePath] === type) continue;
+        try {
+          await this.processSpritesByAtlases(spritePath, {
+            // animate: /animated/.test(type),
+            fileRoot: fileNameMap[spritePath],
+            extractAll: this.options.extractAllFrames,
+            // timelineRoot: type === 'animated_2' ? fileNameMap[spritePath] : '',
+          });
+          processedSprites[spritePath] = type;
+        } catch (err) {
+          console.log(err);
+        }
 
-      if (!(count % 10)) {
-        await writeFile(
-          `${this.ROOT_PATH}/sprites.lock`,
-          JSON.stringify(processedSprites, null, 2)
-        );
+        if (!(count % 10)) {
+          await writeFile(
+            `${this.ROOT_PATH}/sprites.lock`,
+            JSON.stringify(processedSprites, null, 2)
+          );
+        }
       }
+      await writeFile(
+        `${this.ROOT_PATH}/sprites.lock`,
+        JSON.stringify(processedSprites, null, 2)
+      );
+
+      spriteTracker.end();
     }
-    await writeFile(
-      `${this.ROOT_PATH}/sprites.lock`,
-      JSON.stringify(processedSprites, null, 2)
-    );
-
-    spriteTracker.end();
   };
 
   development = async (debug) => {
@@ -1305,9 +1327,31 @@ class WfExtractor {
 
     this.__debug = debug;
 
-    // return this.extractCharacterSpriteMetaDatas();
+    // return this.extractPossibleImageAssets();
 
-    return this.extractPossibleImageAssets();
+    const found = await this.digestAndCheckFilePath(debug);
+
+    logger.log(JSON.stringify(found || {}));
+
+    if (found) {
+      try {
+        await this.fileReader.readGeneralAndCreateOutput(found[1], found[0]);
+      } catch (err) {
+        console.log(err);
+      }
+    }
+
+    // await this.processSpritesByAtlases(`${this.ROOT_PATH}/output/assets/item`, {
+    //   extractAll: true,
+    // });
+    // await this.processSpritesByAtlases(
+    //   `${this.ROOT_PATH}/output/assets/character/alice/pixelart`,
+    //   {
+    //     extractAll: true,
+    //   }
+    // );
+
+    return true;
   };
 
   close = async () => {
