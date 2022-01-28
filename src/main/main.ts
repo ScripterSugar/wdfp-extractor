@@ -163,7 +163,7 @@ ipcMain.on(
 
         if (extractionPhase <= 6) {
           if (extractCharacterImage) {
-            // await wfExtractor.extractCharacterImageAssets();
+            await wfExtractor.extractCharacterImageAssets();
 
             if (processAtlas) {
               await wfExtractor.extractCharacterSpriteMetaDatas();
