@@ -406,7 +406,7 @@ class WfExtractor {
       logger.log(`${deltaFiles.length} files newly extracted and saved.`);
     } else {
       logger.log(
-        'WARNING: failed to find metadata, executing full asset dump. this process might take more than several minutes, so please be patience.'
+        'WARNING: failed to find metadata, executing full asset dump. this process might take more than several minutes, so please be patient.'
       );
       isChanged = true;
       await new Promise((resolve) => rimraf(`${this.ROOT_PATH}/dump`, resolve));
