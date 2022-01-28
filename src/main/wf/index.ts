@@ -250,9 +250,20 @@ class WfExtractor {
       );
     }
 
-    this.metadata = JSON.parse(
-      fs.readFileSync(METADATA_PATH(this.ROOT_PATH)).toString()
-    );
+    try {
+      this.metadata = JSON.parse(
+        fs.readFileSync(METADATA_PATH(this.ROOT_PATH)).toString()
+      );
+    } catch (err) {
+      fs.writeFileSync(
+        METADATA_PATH(this.ROOT_PATH),
+        JSON.stringify({
+          lastExtractionDate: null,
+          lastPackageVersion: null,
+          lastSwfChecksum: null,
+        })
+      );
+    }
   };
 
   selectDevice = async (deviceId) => {

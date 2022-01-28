@@ -479,6 +479,19 @@ const AppContent = () => {
     setDevConsoleLogs([]);
     setOpenSelectOption(false);
     setShowDevConsole(true);
+
+    if (/[^A-z/\\ -:]/.test(targetDir)) {
+      setIsExtracting(false);
+      return setExtractionError({
+        error:
+          'Invalid characters in target directory.\nExtraction path must only include english and dashes.',
+        actions: [
+          <WfDangerButton onClick={() => responseExtraction('done')}>
+            Abort
+          </WfDangerButton>,
+        ],
+      });
+    }
     window.electron.ipcRenderer.startExtraction(targetDir, {
       ...options,
       debug: options.isDebug && options.debug,
@@ -494,7 +507,7 @@ const AppContent = () => {
       }
     }
 
-    setIsExtracting(false);
+    return setIsExtracting(false);
   };
 
   const openTargetDir = () => {
