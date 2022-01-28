@@ -39,7 +39,7 @@ Simply just connect your device, select the directory you want to save your asse
 
 Once the extraction is done, you can find inflated asset files located in the output directory under your extraction directory.
 
-**Do not close the app even if it hangs. The process might hangs a lot and few tasks require more than dozens of minutes. Be patient while extraction is in progress**
+**Do not close the app even if it hangs. The process might hangs a lot and several tasks require more than dozens of minutes. Be patient while extraction is in progress**
 
 ## Supported Assets
 - APK
