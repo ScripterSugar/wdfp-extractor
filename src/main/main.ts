@@ -14,6 +14,7 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import { createWriteStream } from 'fs';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import logger from './wf/logger';
@@ -82,7 +83,6 @@ ipcMain.on(
       processAtlas,
       processAtlasMisc,
       parseActionScript,
-      swfMode = 'full',
       customPort,
       debug,
     }
@@ -93,7 +93,7 @@ ipcMain.on(
     const wfExtractor = new WfExtractor({
       region,
       rootDir,
-      swfMode,
+      swfMode: (parseActionScript && 'full') || 'simple',
       customPort,
       extractAllFrames,
     });
@@ -107,6 +107,18 @@ ipcMain.on(
 
     while (replyPacket !== 'done') {
       console.log(`TRYING EXTRACTION, Current Phase ${extractionPhase}`);
+
+      if (replyPacket === 'purgeSwf') {
+        await wfExtractor.markMetaData({
+          lastSwfChecksum: null,
+          lastSwfMode: null,
+        });
+      }
+      if (/phase/.test(replyPacket)) {
+        const targetPhase = parseFloat(replyPacket.split(':')[1]);
+
+        extractionPhase = targetPhase;
+      }
       try {
         if (extractionPhase <= 0) {
           await wfExtractor.init();
@@ -149,7 +161,7 @@ ipcMain.on(
         }
 
         if (extractionPhase <= 5) {
-          if (extractMaster) {
+          if (extractMaster || /extractMaster/.test(replyPacket)) {
             await wfExtractor.extractMasterTable();
             if (parseActionScript) {
               await wfExtractor.buildAsFilePaths();
@@ -232,18 +244,25 @@ const installExtensions = async () => {
     .catch(console.log);
 };
 
+const RESOURCE_PATH = app.isPackaged
+  ? process.resourcesPath
+  : path.join(__dirname, '../../');
+
+const ASSETS_PATH = path.join(RESOURCE_PATH, 'assets');
+
+const getAssetPath = (...paths: string[]): string => {
+  return path.join(ASSETS_PATH, ...paths);
+};
+
+if (process.env.NODE_ENV !== 'development') {
+  const logs = createWriteStream(path.join(RESOURCE_PATH, '/debug_out.log'));
+  process.stdout.write = process.stderr.write = logs.write.bind(logs); // eslint-disable-line
+}
+
 const createWindow = async () => {
   if (isDevelopment) {
     await installExtensions();
   }
-
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '../../assets');
-
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
 
   mainWindow = new BrowserWindow({
     show: false,

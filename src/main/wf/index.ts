@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import rimraf from 'rimraf';
 import { app } from 'electron';
 import { ChildProcess, spawn } from 'child_process';
-import { readdir, readFile, writeFile } from 'fs/promises';
+import { readdir, readFile, stat, writeFile } from 'fs/promises';
 import WfFileReader from './wfFileReader';
 import logger from './logger';
 import { LSResult, WFExtractorMetaData } from './typedefs';
@@ -529,6 +529,23 @@ class WfExtractor {
     }
   };
 
+  checkBootFfc6 = async () => {
+    try {
+      const bootFfc6 = await stat(`${this.ROOT_PATH}/swf/scripts/boot_ffc6.as`);
+
+      if (bootFfc6.size < 500 * 1024) {
+        throw new Error('INVALID_BOOT_FFC6');
+      }
+    } catch (err) {
+      console.log(err);
+
+      if (err.message === 'INVALID_BOOT_FFC6') {
+        throw err;
+      }
+      throw new Error('FAILED_TO_EXTRACT_BOOT_FFC6');
+    }
+  };
+
   decompileAndExportSwf = async () => {
     const apkExtractionPath = `${this.ROOT_PATH}/apk-extract`;
     const swfExtractionPath = `${this.ROOT_PATH}/swf`;
@@ -546,8 +563,6 @@ class WfExtractor {
       .update(swfData, 'utf8')
       .digest('hex');
 
-    console.log(swfCheckSum);
-
     if (swfCheckSum !== this.metadata.lastSwfChecksum) {
       logger.log(
         'SWF checksum mismatch - decompile swf and export essential scripts... (This might take more than several minutes.)'
@@ -558,6 +573,7 @@ class WfExtractor {
     ) {
       logger.log('Processing full asset dump...');
     } else {
+      await this.checkBootFfc6();
       logger.log('Skipping Swf extraction.');
       return;
     }
@@ -565,6 +581,11 @@ class WfExtractor {
     if (fs.existsSync(swfExtractionPath)) {
       logger.log('Cleaning up existing files...');
       await new Promise((resolve) => rimraf(swfExtractionPath, resolve));
+
+      this.markMetaData({
+        lastSwfChecksum: null,
+        lastSwfMode: null,
+      });
       logger.log('File cleanup successful.');
     }
 
@@ -577,6 +598,12 @@ class WfExtractor {
       [
         '-jar',
         getAssetPath('/ffdec/ffdec.jar'),
+        '-timeout',
+        '600',
+        '-exportFileTimeout',
+        '6000',
+        '-exportTimeout',
+        '60000',
         '-export',
         'script',
         `${swfExtractionPath}`,
@@ -659,6 +686,8 @@ class WfExtractor {
     } catch (err) {
       console.log(err);
     }
+
+    await this.checkBootFfc6();
 
     this.markMetaData({
       lastSwfChecksum: swfCheckSum,

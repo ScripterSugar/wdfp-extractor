@@ -381,20 +381,64 @@ const AppContent = () => {
           ],
         });
       }
+      case 'FAILED_TO_LOAD_PATHS': {
+        return setExtractionError({
+          error:
+            'Master tables are not extracted.\nPlease turn on the option "Extract master table" if this is your first extraction.',
+          actions: [
+            <WfDangerButton onClick={() => responseExtraction('done')}>
+              Abort
+            </WfDangerButton>,
+            <WfButton
+              onClick={() => responseExtraction('extractMaster|phase:5')}
+            >
+              Retry with option
+            </WfButton>,
+          ],
+        });
+      }
       case 'PROHIBITED_DATA_PERMISSION': {
         return setExtractionError({
           error:
-            'Connected device does not have permission to read data asset path.\n\nYou can still try to execute full asset dump,\nBut it might take long time and can still be failed.\n',
+            'Connected device does not have file listing access to the /data root directory.\nYour device must be rooted to extract assets.',
           ref: 'https://github.com/ScripterSugar/wdfp-extractor',
           actions: [
             <WfDangerButton onClick={() => responseExtraction('done')}>
               Abort
             </WfDangerButton>,
+          ],
+        });
+      }
+      case 'INVALID_BOOT_FFC6': {
+        return setExtractionError({
+          error: `boot_ffc6 script file seems like in invalid format.\nThis error might caused by misoperation of your FFDEC skipping the extraction due to timeout setting.\nIf the problem persists, try put the scripts file under swf/scripts directly using FFDEC standalone.\nboot_ffc6.as file must be present at the path ${targetDir}/swf/scripts/boot_ffc6.as\n\nOr you can retry swf extraction, purging current decompiled swf files.`,
+          ref: 'https://github.com/jindrapetrik/jpexs-decompiler',
+          actions: [
+            <WfDangerButton onClick={() => responseExtraction('done')}>
+              Abort
+            </WfDangerButton>,
+            <WfButton onClick={() => responseExtraction('purgeSwf')}>
+              Purge SWF
+            </WfButton>,
             <WfButton onClick={() => responseExtraction('retry')}>
               Retry
             </WfButton>,
+          ],
+        });
+      }
+      case 'FAILED_TO_EXTRACT_BOOT_FFC6': {
+        return setExtractionError({
+          error: `Essential AS scripts were not extracted due to performance issue or misoperation of FFDEC.\nIf the problem persists, try put the scripts file under swf/scripts directly using FFDEC standalone.\nboot_ffc6.as file must be present at the path ${targetDir}/swf/scripts/boot_ffc6.as\n\nOr you can retry swf extraction, purging current decompiled swf files.`,
+          ref: 'https://github.com/jindrapetrik/jpexs-decompiler',
+          actions: [
+            <WfDangerButton onClick={() => responseExtraction('done')}>
+              Abort
+            </WfDangerButton>,
+            <WfButton onClick={() => responseExtraction('purgeSwf')}>
+              Purge SWF
+            </WfButton>,
             <WfButton onClick={() => responseExtraction('retry')}>
-              Try Full dump
+              Retry
             </WfButton>,
           ],
         });

@@ -49,6 +49,7 @@ export const spawnCommand = (command, args, { wait, logFn }) => {
     let lastChunkString;
 
     child.stdout.on('data', (chunk) => {
+      console.log(chunk.toString());
       if (`${lastChunkString}${chunk.toString()}`.includes(wait)) {
         awaitResolver();
       }
