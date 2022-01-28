@@ -69,7 +69,14 @@ export default class WfFileReader {
     for (const pathPrefix of ELIGIBLE_PATH_PREFIXES) {
       const dirPath = `${this._rootDir}/${pathPrefix}`;
 
-      const subDirs = await readdir(dirPath);
+      let subDirs;
+
+      try {
+        subDirs = await readdir(dirPath);
+      } catch (err) {
+        console.log(err);
+        continue;
+      }
 
       targetDirectories.push({
         dirPath,
