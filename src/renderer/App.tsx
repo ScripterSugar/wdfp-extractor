@@ -218,12 +218,14 @@ const AppContent = () => {
   const [options, setOptions] = usePermanentState(
     {
       extractMaster: true,
+      parseActionScript: true,
       extractCharacterImage: true,
       extractMiscImage: true,
       extractAudio: true,
       extractAllFrames: false,
       customPort: '',
       processAtlas: false,
+      processAtlasMisc: false,
       region: 'gl',
       debug: '',
       isDebug: false,
@@ -235,9 +237,17 @@ const AppContent = () => {
       } catch (err) {
         return {
           extractMaster: true,
+          parseActionScript: true,
           extractCharacterImage: true,
+          extractMiscImage: true,
+          extractAudio: true,
+          extractAllFrames: false,
+          customPort: '',
           processAtlas: false,
+          processAtlasMisc: false,
           region: 'gl',
+          debug: '',
+          isDebug: false,
         };
       }
     },
@@ -462,7 +472,7 @@ const AppContent = () => {
       devLogRef.current?.scrollTo(0, devLogRef.current?.scrollHeight);
     });
 
-    onChangeOptions('isDebug', false);
+    onChangeOptions('isDebug', process.env.NODE_ENV === 'development');
 
     (async () => {
       const ipcReturn = getIpcReturn('appVersion');
@@ -602,9 +612,22 @@ const AppContent = () => {
         >
           V.{appVersion}
         </Typography>
-        {(updateAvailable && <Typography>Update Available</Typography>) || (
-          <Typography>No updates available</Typography>
-        )}
+        {(updateAvailable && (
+          <>
+            <Typography>Update Available</Typography>
+            <WfButton
+              style={{
+                justifyContent: 'center',
+                height: 48,
+                marginTop: 16,
+                fontSize: '1rem',
+              }}
+              onClick={restartAndUpdate}
+            >
+              Restart And Update
+            </WfButton>
+          </>
+        )) || <Typography>No updates available</Typography>}
         <br />
         Created by | INASOM#3195
         <br />
@@ -640,6 +663,20 @@ const AppContent = () => {
                 value={options.extractMaster}
                 onClick={() =>
                   onChangeOptions('extractMaster', !options.extractMaster)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+            <LayoutFlexSpaceBetween>
+              <Typography>Search ActionScripts for assets</Typography>
+              <Switch
+                data-disabled={!options.extractMaster}
+                value={options.parseActionScript}
+                onClick={() =>
+                  options.extractMaster &&
+                  onChangeOptions(
+                    'parseActionScript',
+                    !options.parseActionScript
+                  )
                 }
               />
             </LayoutFlexSpaceBetween>
@@ -688,6 +725,24 @@ const AppContent = () => {
             </LayoutFlexSpaceBetween>
             <LayoutFlexSpaceBetween>
               <LayoutFlexColumn>
+                <Typography>Crop general image assets by atlases</Typography>
+                <IndicatorTypo>
+                  This makes extraction process way slower.
+                </IndicatorTypo>
+              </LayoutFlexColumn>
+              <Switch
+                data-disabled={!options.extractMiscImage}
+                value={options.processAtlasMisc}
+                onClick={() =>
+                  options.extractMiscImage &&
+                  onChangeOptions('processAtlasMisc', !options.processAtlasMisc)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+          </LayoutFlexDivideHalf>
+          <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
+            <LayoutFlexSpaceBetween>
+              <LayoutFlexColumn>
                 <Typography>Extract audio assets</Typography>
                 <IndicatorTypo>Voiceline, BGM, S/E</IndicatorTypo>
               </LayoutFlexColumn>
@@ -698,9 +753,25 @@ const AppContent = () => {
                 }
               />
             </LayoutFlexSpaceBetween>
+            <LayoutFlexSpaceBetween>
+              <LayoutFlexColumn>
+                <Typography>Include duplicated frames for sprites</Typography>
+                <IndicatorTypo>
+                  This makes extraction process slower.
+                </IndicatorTypo>
+              </LayoutFlexColumn>
+              <Switch
+                data-disabled={!options.processAtlasMisc}
+                value={options.extractAllFrames}
+                onClick={() =>
+                  options.processAtlasMisc &&
+                  onChangeOptions('extractAllFrames', !options.extractAllFrames)
+                }
+              />
+            </LayoutFlexSpaceBetween>
           </LayoutFlexDivideHalf>
-          <LayoutFlexDivideHalf>
-            <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
+          <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
+            <LayoutFlexSpaceBetween>
               <LayoutFlexColumn>
                 <Typography>Custom emulator port</Typography>
                 <IndicatorTypo>
@@ -715,28 +786,14 @@ const AppContent = () => {
                 }
               />
             </LayoutFlexSpaceBetween>
-            <LayoutFlexSpaceBetween>
-              <LayoutFlexColumn>
-                <Typography>Include duplicated frames for sprites</Typography>
-                <IndicatorTypo>
-                  This makes extraction process slower.
-                </IndicatorTypo>
-              </LayoutFlexColumn>
-              <Switch
-                value={options.extractAllFrames}
-                onClick={() =>
-                  onChangeOptions('extractAllFrames', !options.extractAllFrames)
-                }
-              />
-            </LayoutFlexSpaceBetween>
           </LayoutFlexDivideHalf>
           {options.isDebug && (
             <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
               <Typography style={{ flexShrink: 0, marginRight: 16 }}>
                 Debug String
               </Typography>
-              <input
-                style={{ width: '100%' }}
+              <textarea
+                style={{ width: '100%', height: 48, whiteSpace: 'pre-line' }}
                 value={options.debug}
                 onChange={(event) =>
                   onChangeOptions('debug', event.target.value)

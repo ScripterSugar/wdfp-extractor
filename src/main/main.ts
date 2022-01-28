@@ -80,6 +80,8 @@ ipcMain.on(
       extractAudio,
       extractAllFrames,
       processAtlas,
+      processAtlasMisc,
+      parseActionScript,
       swfMode = 'full',
       customPort,
       debug,
@@ -149,7 +151,9 @@ ipcMain.on(
         if (extractionPhase <= 5) {
           if (extractMaster) {
             await wfExtractor.extractMasterTable();
-            await wfExtractor.buildAsFilePaths();
+            if (parseActionScript) {
+              await wfExtractor.buildAsFilePaths();
+            }
           } else {
             await wfExtractor.loadFilePaths();
             await wfExtractor.loadAsFilePaths();
@@ -159,7 +163,7 @@ ipcMain.on(
 
         if (extractionPhase <= 6) {
           if (extractCharacterImage) {
-            await wfExtractor.extractCharacterImageAssets();
+            // await wfExtractor.extractCharacterImageAssets();
 
             if (processAtlas) {
               await wfExtractor.extractCharacterSpriteMetaDatas();
@@ -171,7 +175,9 @@ ipcMain.on(
 
         if (extractionPhase <= 7) {
           if (extractMiscImage) {
-            await wfExtractor.extractPossibleImageAssets();
+            await wfExtractor.extractPossibleImageAssets({
+              cropSprites: processAtlasMisc,
+            });
           }
 
           extractionPhase = 8;

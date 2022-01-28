@@ -142,7 +142,6 @@ export default class WfFileReader {
     const openedFile = await readFile(filePath);
 
     let fileContent = await asyncInflateRaw(openedFile);
-
     let savePath = originSavePath;
     let jsonData;
 
@@ -301,7 +300,7 @@ export default class WfFileReader {
   cropSpritesFromAtlas = async ({
     sprite,
     atlases,
-    destPath,
+    destPath: _destPath,
     generateGif,
     extractAll = false,
   } = {}) => {
@@ -310,7 +309,6 @@ export default class WfFileReader {
     let begin;
     let end;
     let gifOptions = {};
-
     if (typeof generateGif === 'string') {
       needGenerateGif = true;
       dest = generateGif;
@@ -319,6 +317,7 @@ export default class WfFileReader {
       ({ dest, begin, end, ...gifOptions } = generateGif);
     }
     const xyCache = {};
+    const dirCache = {};
 
     let targetImages = [];
     const images = await Promise.all(
@@ -327,6 +326,7 @@ export default class WfFileReader {
         let imageBuffer;
         let isDuplicated;
         let cacheResolver;
+        let destPath = _destPath;
         if (xyCache[`${x}${y}`]) {
           imageBuffer = await xyCache[`${x}${y}`];
           isDuplicated = true;
@@ -357,6 +357,22 @@ export default class WfFileReader {
 
           cacheResolver(imageBuffer);
         }
+
+        const destAssetOriginRootPath = destPath
+          .replace(`${this._rootDir}/output/assets/`, '')
+          .split('/')
+          .slice(0, -1)
+          .join('/');
+
+        if (
+          name.split('/').slice(0, -1).join('/') !== destAssetOriginRootPath
+        ) {
+          destPath = `${this._rootDir}/output/assets/${name
+            .split('/')
+            .slice(0, -1)
+            .join('/')}/`;
+        }
+
         const frameId = name.split('/').pop();
         let saveNameRoot = frameId;
 
@@ -380,7 +396,10 @@ export default class WfFileReader {
         }
 
         if (!isDuplicated || extractAll) {
-          await mkdir(destPath, { recursive: true });
+          if (!dirCache[destPath]) {
+            await mkdir(destPath, { recursive: true });
+            dirCache[destPath] = true;
+          }
 
           await writeFile(path.join(destPath, saveName), imageBuffer);
         }
