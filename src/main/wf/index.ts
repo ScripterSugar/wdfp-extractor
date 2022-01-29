@@ -749,7 +749,7 @@ class WfExtractor {
       const loadedAsFilePaths = JSON.parse(
         (await readFile(`${this.ROOT_PATH}/asFilePaths.lock`)).toString()
       );
-      this.asFilePaths = loadedAsFilePaths;
+      this.asFilePaths = loadedAsFilePaths || [];
     } catch (err) {
       console.log(err);
     }
@@ -1119,7 +1119,7 @@ class WfExtractor {
       foundAsFiles
     );
 
-    this.asFilePaths = asFilePaths;
+    this.asFilePaths = asFilePaths || [];
 
     await writeFile(
       `${this.ROOT_PATH}/asFilePaths.lock`,
@@ -1149,7 +1149,7 @@ class WfExtractor {
     const fileNameMap = {};
 
     for (const filePath of [
-      ...new Set([...this.asFilePaths, ...this.filePaths]),
+      ...new Set([...(this.asFilePaths || []), ...this.filePaths]),
     ]) {
       pushExist(
         possibleImageAssets,

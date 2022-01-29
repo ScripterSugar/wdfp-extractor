@@ -165,6 +165,8 @@ ipcMain.on(
             await wfExtractor.extractMasterTable();
             if (parseActionScript) {
               await wfExtractor.buildAsFilePaths();
+            } else {
+              await wfExtractor.loadAsFilePaths();
             }
           } else {
             await wfExtractor.loadFilePaths();
