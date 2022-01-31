@@ -51,6 +51,7 @@ Once the extraction is done, you can find inflated asset files located in the ou
 - Audio files including BGM, Character voice lines, S/E and more.
 - Cropped sprites based on atlases and sprite sheet
 - Animated images generated from sprites (Character images only)
+- Skill/Action descriptors for characters / bosses / items, including all the details about the skills.
 
 ## Planned feature
 - Support extraction of ability texts
