@@ -1399,7 +1399,7 @@ class WfExtractor {
 
     this.__debug = debug;
 
-    return this.extractPossibleGeneralAmf3Assets();
+    // return this.extractPossibleGeneralAmf3Assets();
 
     const found = await this.digestAndCheckFilePath(debug);
 
