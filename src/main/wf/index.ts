@@ -1182,11 +1182,11 @@ class WfExtractor {
         await this.digestAndCheckFilePath(`${filePath}.mp3`)
       );
       pushExist(
-        possibleAudioAssets,
+        possibleGeneralAmfAssets,
         await this.digestAndCheckFilePath(`${filePath}.atf.deflate`)
       );
       pushExist(
-        possibleAudioAssets,
+        possibleGeneralAmfAssets,
         await this.digestAndCheckFilePath(
           `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.atf.deflate`
         )
