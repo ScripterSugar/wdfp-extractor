@@ -223,6 +223,7 @@ const AppContent = () => {
       extractMiscImage: true,
       extractAudio: true,
       extractAllFrames: false,
+      extractGeneralAmf: true,
       customPort: '',
       processAtlas: false,
       processAtlasMisc: false,
@@ -242,6 +243,7 @@ const AppContent = () => {
           extractMiscImage: true,
           extractAudio: true,
           extractAllFrames: false,
+          extractGeneralAmf: true,
           customPort: '',
           processAtlas: false,
           processAtlasMisc: false,
@@ -812,17 +814,16 @@ const AppContent = () => {
             </LayoutFlexSpaceBetween>
             <LayoutFlexSpaceBetween>
               <LayoutFlexColumn>
-                <Typography>Include duplicated frames for sprites</Typography>
-                <IndicatorTypo>
-                  This makes extraction process slower.
-                </IndicatorTypo>
+                <Typography>Extract general configs</Typography>
+                <IndicatorTypo>Skill descriptors, ETC.</IndicatorTypo>
               </LayoutFlexColumn>
               <Switch
-                data-disabled={!options.processAtlasMisc}
-                value={options.extractAllFrames}
+                value={options.extractGeneralAmf}
                 onClick={() =>
-                  options.processAtlasMisc &&
-                  onChangeOptions('extractAllFrames', !options.extractAllFrames)
+                  onChangeOptions(
+                    'extractGeneralAmf',
+                    !options.extractGeneralAmf
+                  )
                 }
               />
             </LayoutFlexSpaceBetween>
@@ -840,6 +841,22 @@ const AppContent = () => {
                 value={options.customPort}
                 onChange={(event) =>
                   onChangeOptions('customPort', event.target.value)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+            <LayoutFlexSpaceBetween>
+              <LayoutFlexColumn>
+                <Typography>Include duplicated frames for sprites</Typography>
+                <IndicatorTypo>
+                  This makes extraction process slower.
+                </IndicatorTypo>
+              </LayoutFlexColumn>
+              <Switch
+                data-disabled={!options.processAtlasMisc}
+                value={options.extractAllFrames}
+                onClick={() =>
+                  options.processAtlasMisc &&
+                  onChangeOptions('extractAllFrames', !options.extractAllFrames)
                 }
               />
             </LayoutFlexSpaceBetween>

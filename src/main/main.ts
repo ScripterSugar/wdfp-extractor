@@ -80,6 +80,7 @@ ipcMain.on(
       extractMiscImage,
       extractAudio,
       extractAllFrames,
+      extractGeneralAmf,
       processAtlas,
       processAtlasMisc,
       parseActionScript,
@@ -192,6 +193,14 @@ ipcMain.on(
             await wfExtractor.extractPossibleImageAssets({
               cropSprites: processAtlasMisc,
             });
+          }
+
+          extractionPhase = 7.5;
+        }
+
+        if (extractionPhase <= 7.5) {
+          if (extractGeneralAmf) {
+            await wfExtractor.extractPossibleGeneralAmf3Assets();
           }
 
           extractionPhase = 8;

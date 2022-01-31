@@ -160,8 +160,9 @@ class WfExtractor {
 
   possibleAssetCache: {
     possibleImageAssets: PossibleAssetPathTuple[];
+    possibleGeneralAmfAssets: PossibleAssetPathTuple[];
     possibleAudioAssets: PossibleAssetPathTuple[];
-    possibleAmfAssets: PossibleAssetPathTuple[];
+    possibleImageAmfAssets: PossibleAssetPathTuple[];
     sprites: { [spritePath: string]: string };
   };
 
@@ -1143,7 +1144,8 @@ class WfExtractor {
 
     const possibleImageAssets = [];
     const possibleAudioAssets = [];
-    const possibleAmfAssets = [];
+    const possibleImageAmfAssets = [];
+    const possibleGeneralAmfAssets = [];
 
     const sprites = {};
     const fileNameMap = {};
@@ -1160,6 +1162,10 @@ class WfExtractor {
         await this.digestAndCheckFilePath(
           `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.png`
         )
+      );
+      pushExist(
+        possibleGeneralAmfAssets,
+        await this.digestAndCheckFilePath(`${filePath}.action.dsl.amf3.deflate`)
       );
       const splittedPath = filePath.split('/');
       splittedPath.pop();
@@ -1229,22 +1235,22 @@ class WfExtractor {
         imagePath.replace(fileName, `${fileNameRoot}.atf.deflate`)
       );
 
-      pushExist(possibleAmfAssets, partsEntry);
-      pushExist(possibleAmfAssets, frameEntry);
-      pushExist(possibleAmfAssets, pixelartFrameEntry);
-      pushExist(possibleAmfAssets, atfEntry);
+      pushExist(possibleImageAmfAssets, partsEntry);
+      pushExist(possibleImageAmfAssets, frameEntry);
+      pushExist(possibleImageAmfAssets, pixelartFrameEntry);
+      pushExist(possibleImageAmfAssets, atfEntry);
 
       if (atlasEntry) {
         sprites[parentPath] = 'sprite';
-        possibleAmfAssets.push(atlasEntry);
+        possibleImageAmfAssets.push(atlasEntry);
       }
       if (timelineEntry) {
         sprites[parentPath] = 'animated';
-        possibleAmfAssets.push(timelineEntry);
+        possibleImageAmfAssets.push(timelineEntry);
       }
       if (pixelArtTimelineEntry) {
         sprites[parentPath] = 'animated_2';
-        possibleAmfAssets.push(pixelArtTimelineEntry);
+        possibleImageAmfAssets.push(pixelArtTimelineEntry);
       }
       if (this.__debug) {
         const debugEntry = await this.digestAndCheckFilePath(
@@ -1253,7 +1259,7 @@ class WfExtractor {
             `${this.__debug.replace(/\$rootname/, fileNameRoot)}`
           )
         );
-        pushExist(possibleAmfAssets, debugEntry);
+        pushExist(possibleImageAmfAssets, debugEntry);
       }
     }
     amf3Tracker.end();
@@ -1261,7 +1267,8 @@ class WfExtractor {
     this.possibleAssetCache = {
       possibleImageAssets,
       possibleAudioAssets,
-      possibleAmfAssets,
+      possibleImageAmfAssets,
+      possibleGeneralAmfAssets,
       sprites,
       fileNameMap,
     };
@@ -1283,11 +1290,36 @@ class WfExtractor {
     audioTracker.end();
   };
 
+  extractPossibleGeneralAmf3Assets = async () => {
+    const { possibleGeneralAmfAssets } = await this.loadPossibleAssets();
+
+    if (process.env.NODE_ENV === 'development') {
+      await writeFile(
+        `${this.ROOT_PATH}/dev_general_amf.json`,
+        JSON.stringify(possibleGeneralAmfAssets, null, 2)
+      );
+    }
+
+    const amfTracker = logger.progressStart({
+      id: 'Extracting general amf3 assets...',
+      max: possibleGeneralAmfAssets.length,
+    });
+    for (const [fileName, filePath] of possibleGeneralAmfAssets) {
+      amfTracker.progress();
+      await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
+    }
+    amfTracker.end();
+  };
+
   extractPossibleImageAssets = async ({
     cropSprites,
   }: { cropSprites: boolean } = {}) => {
-    const { possibleImageAssets, possibleAmfAssets, sprites, fileNameMap } =
-      await this.loadPossibleAssets();
+    const {
+      possibleImageAssets,
+      possibleImageAmfAssets,
+      sprites,
+      fileNameMap,
+    } = await this.loadPossibleAssets();
     const imageTracker = logger.progressStart({
       id: 'Extracting general image assets...',
       max: possibleImageAssets.length,
@@ -1300,9 +1332,9 @@ class WfExtractor {
 
     const amfAssetTracker = logger.progressStart({
       id: 'Extracting deflated generals...',
-      max: possibleAmfAssets.length,
+      max: possibleImageAmfAssets.length,
     });
-    for (const [fileName, filePath] of possibleAmfAssets) {
+    for (const [fileName, filePath] of possibleImageAmfAssets) {
       amfAssetTracker.progress();
       await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
     }
@@ -1367,7 +1399,7 @@ class WfExtractor {
 
     this.__debug = debug;
 
-    // return this.extractPossibleImageAssets();
+    return this.extractPossibleGeneralAmf3Assets();
 
     const found = await this.digestAndCheckFilePath(debug);
 

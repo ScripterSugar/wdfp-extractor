@@ -142,7 +142,8 @@ export const CHARACTER_AMF_PRESERTS = [
     `character/${character}/pixelart/sprite_sheet.atlas.amf3.deflate`,
 ];
 
-export const POSSIBLE_PATH_REGEX = /[.a-zA-Z_0-9]+?\/[.a-zA-Z_0-9\/]+/g;
+export const POSSIBLE_PATH_REGEX = /[.$a-zA-Z_0-9]+?\/[.$a-zA-Z_0-9\/]+/g;
+
 export const CHARACTER_VOICE_PRESETS = [
   (character) => `character/${character}/voice/ally/evolution.mp3`,
   (character) => `character/${character}/voice/ally/join.mp3`,
