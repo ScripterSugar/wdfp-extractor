@@ -35,7 +35,7 @@ To use this tool, your device should at least have file-listing access to the /d
 ## Usage
 ![wdfp](https://user-images.githubusercontent.com/19164553/149924519-91e016e3-5ac7-4d97-a8f3-c7c833f79e76.gif)
 
-Simply just connect your device, select the directory you want to save your assets, and click on the Extract Data button.
+Simply just connect your device(The device must downloaded all the assets from world flipper client.), select the directory you want to save your assets, and click on the Extract Data button.
 
 Once the extraction is done, you can find inflated asset files located in the output directory under your extraction directory.
 
