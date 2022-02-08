@@ -85,6 +85,7 @@ class Logger {
             id,
           },
         });
+        this.log(`${id} Done`);
       },
     };
   };

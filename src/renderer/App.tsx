@@ -228,7 +228,7 @@ const AppContent = () => {
       processAtlas: false,
       processAtlasMisc: false,
       region: 'gl',
-      debug: '',
+      debug: 'sprite item/sprite_sheet',
       isDebug: false,
     },
     'EXTRACT_OPTION',
@@ -248,7 +248,7 @@ const AppContent = () => {
           processAtlas: false,
           processAtlasMisc: false,
           region: 'gl',
-          debug: '',
+          debug: 'sprite item/sprite_sheet',
           isDebug: false,
         };
       }
@@ -863,11 +863,17 @@ const AppContent = () => {
           </LayoutFlexDivideHalf>
           {options.isDebug && (
             <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
-              <Typography style={{ flexShrink: 0, marginRight: 16 }}>
-                Debug String
-              </Typography>
+              <LayoutFlexColumn>
+                <Typography style={{ flexShrink: 0, marginRight: 16 }}>
+                  Dev command
+                </Typography>
+                <IndicatorTypo>
+                  usage: [command] [filepath] <br />
+                  commands: [master | general | image | audio | sprite]
+                </IndicatorTypo>
+              </LayoutFlexColumn>
               <textarea
-                style={{ width: '100%', height: 48, whiteSpace: 'pre-line' }}
+                style={{ width: '50%', height: 48, whiteSpace: 'pre-line' }}
                 value={options.debug}
                 onChange={(event) =>
                   onChangeOptions('debug', event.target.value)

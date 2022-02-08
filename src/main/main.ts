@@ -173,6 +173,12 @@ ipcMain.on(
             await wfExtractor.loadFilePaths();
             await wfExtractor.loadAsFilePaths();
           }
+          extractionPhase = 5.5;
+        }
+
+        if (extractionPhase <= 5.5) {
+          await wfExtractor.extractGachaOdds();
+
           extractionPhase = 6;
         }
 
@@ -193,6 +199,7 @@ ipcMain.on(
             await wfExtractor.extractPossibleImageAssets({
               cropSprites: processAtlasMisc,
             });
+            await wfExtractor.extractSkillEffects();
           }
 
           extractionPhase = 7.5;

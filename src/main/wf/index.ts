@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import rimraf from 'rimraf';
 import { app } from 'electron';
 import { ChildProcess, spawn } from 'child_process';
-import { readdir, readFile, stat, writeFile } from 'fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'fs/promises';
 import WfFileReader from './wfFileReader';
 import logger from './logger';
 import { LSResult, WFExtractorMetaData } from './typedefs';
@@ -23,10 +23,13 @@ import {
   spawnCommand,
 } from './helpers';
 import {
+  BASE_ODD_MAP,
   CHARACTER_AMF_PRESERTS,
   CHARACTER_SPRITE_PRESETS,
   CHARACTER_VOICE_PRESETS,
+  COMMON_FILE_FORMAT,
   DATEFORMAT_A,
+  IS_DEVELOPMENT,
   MERGEABLE_PATH_PREFIXES,
   NOX_PORT_LIST,
   POSSIBLE_PATH_REGEX,
@@ -762,8 +765,20 @@ class WfExtractor {
 
   characterListCache = null;
 
+  readCharacterTextFile = async () => {
+    const characterData = JSON.parse(
+      (
+        await asyncReadFile(
+          `${this.ROOT_PATH}/output/orderedmap/character/character_text.json`
+        )
+      ).toString()
+    );
+
+    return characterData;
+  };
+
   getCharacterList = async ({ raw }: { raw: boolean } = {}) => {
-    if (this.characterListCache) return this.characterListCache;
+    if (this.characterListCache && !raw) return this.characterListCache;
 
     const characterData = JSON.parse(
       (
@@ -974,12 +989,12 @@ class WfExtractor {
 
   processSpritesByAtlases = async (
     spritePath,
-    { animate, fileRoot, timelineRoot, extractAll } = {}
+    { animate, sheetName = 'sprite_sheet', timelineRoot, extractAll } = {}
   ) => {
-    const sheetName = fileRoot || 'sprite_sheet';
     const timelineName = timelineRoot || 'pixelart';
 
     const spriteImage = await asyncReadFile(`${spritePath}/${sheetName}.png`);
+    console.log(`${spritePath}/${sheetName}.atlas.json`);
     const spriteAtlases = JSON.parse(
       (await asyncReadFile(`${spritePath}/${sheetName}.atlas.json`)).toString()
     );
@@ -1139,6 +1154,15 @@ class WfExtractor {
     return null;
   };
 
+  generateNormalPath = (filePath) => {
+    const splittedPath = filePath.split('/');
+    splittedPath.pop();
+    const lastParent = splittedPath.pop();
+    splittedPath.push(lastParent);
+    splittedPath.push(lastParent);
+    return splittedPath.join('/');
+  };
+
   loadPossibleAssets = async () => {
     if (this.possibleAssetCache) return this.possibleAssetCache;
 
@@ -1167,15 +1191,10 @@ class WfExtractor {
         possibleGeneralAmfAssets,
         await this.digestAndCheckFilePath(`${filePath}.action.dsl.amf3.deflate`)
       );
-      const splittedPath = filePath.split('/');
-      splittedPath.pop();
-      const lastParent = splittedPath.pop();
-      splittedPath.push(lastParent);
-      splittedPath.push(lastParent);
-      const lastParentPath = splittedPath.join('/');
+      const normalPath = this.generateNormalPath(filePath);
       pushExist(
         possibleImageAssets,
-        await this.digestAndCheckFilePath(`${lastParentPath}.png`)
+        await this.digestAndCheckFilePath(`${normalPath}.png`)
       );
       pushExist(
         possibleAudioAssets,
@@ -1192,13 +1211,7 @@ class WfExtractor {
         )
       );
     }
-
-    if (process.env.NODE_ENV === 'development') {
-      await writeFile(
-        `${this.ROOT_PATH}/dev_image_assets.json`,
-        JSON.stringify(possibleImageAssets, null, 2)
-      );
-    }
+    await this.developWriteJson('image_assets.json', possibleImageAssets);
 
     const amf3Tracker = logger.progressStart({
       id: 'Searching for possible atlases...',
@@ -1293,12 +1306,7 @@ class WfExtractor {
   extractPossibleGeneralAmf3Assets = async () => {
     const { possibleGeneralAmfAssets } = await this.loadPossibleAssets();
 
-    if (process.env.NODE_ENV === 'development') {
-      await writeFile(
-        `${this.ROOT_PATH}/dev_general_amf.json`,
-        JSON.stringify(possibleGeneralAmfAssets, null, 2)
-      );
-    }
+    await this.developWriteJson('general_amf.json', possibleGeneralAmfAssets);
 
     const amfTracker = logger.progressStart({
       id: 'Extracting general amf3 assets...',
@@ -1364,7 +1372,7 @@ class WfExtractor {
         try {
           await this.processSpritesByAtlases(spritePath, {
             // animate: /animated/.test(type),
-            fileRoot: fileNameMap[spritePath],
+            sheetName: fileNameMap[spritePath],
             extractAll: this.options.extractAllFrames,
             // timelineRoot: type === 'animated_2' ? fileNameMap[spritePath] : '',
           });
@@ -1389,6 +1397,284 @@ class WfExtractor {
     }
   };
 
+  extractSkillEffects = async () => {
+    let battleEffectPaths = [];
+
+    for (let i = 1; i <= 5; i += 1) {
+      const rarityPath = `${this.ROOT_PATH}/output/assets/battle/action/skill/action/rare${i}`;
+      const actionDescriptors = await readdir(rarityPath);
+
+      for (const actionDescriptor of actionDescriptors) {
+        const descContent = await readFile(`${rarityPath}/${actionDescriptor}`);
+
+        battleEffectPaths.push(
+          ...Array.from(
+            descContent.toString('utf-8').matchAll(POSSIBLE_PATH_REGEX)
+          ).map(([match]) => match)
+        );
+      }
+    }
+
+    battleEffectPaths = Array.from(
+      new Set([
+        ...battleEffectPaths,
+        ...battleEffectPaths.map(this.generateNormalPath),
+      ])
+    );
+
+    const foundEffectAssets = [];
+    const foundEffectAmf3Assets = [];
+    const sprites = {};
+
+    for (const effectPath of battleEffectPaths) {
+      const normalPath = this.generateNormalPath(effectPath);
+      let refinedEffectPath = effectPath;
+      let refinedNormalPath = normalPath;
+
+      if (/^character/.test(effectPath)) {
+        refinedEffectPath = [
+          ...effectPath.split('/').slice(0, -1),
+          'sprite_sheet',
+        ].join('/');
+        refinedNormalPath = [
+          ...normalPath.split('/').slice(0, -1),
+          'sprite_sheet',
+        ].join('/');
+        console.log(effectPath, refinedEffectPath, refinedNormalPath);
+      }
+
+      pushExist(
+        foundEffectAssets,
+        await this.digestAndCheckFilePath(`${refinedEffectPath}.png`)
+      );
+      pushExist(
+        foundEffectAmf3Assets,
+        await this.digestAndCheckFilePath(`${effectPath}.frame.amf3.deflate`)
+      );
+      pushExist(
+        foundEffectAmf3Assets,
+        await this.digestAndCheckFilePath(`${effectPath}.parts.amf3.deflate`)
+      );
+      if (
+        pushExist(
+          foundEffectAmf3Assets,
+          await this.digestAndCheckFilePath(
+            `${refinedEffectPath}.atlas.amf3.deflate`
+          )
+        )
+      ) {
+        if (!sprites[refinedNormalPath]) {
+          sprites[refinedNormalPath] = {
+            type: 'sprite',
+            timelines: [],
+          };
+        }
+        sprites[
+          refinedNormalPath
+        ].atlas = `${refinedEffectPath}.atlas.amf3.json`;
+      }
+      if (
+        pushExist(
+          foundEffectAmf3Assets,
+          await this.digestAndCheckFilePath(
+            `${effectPath}.timeline.amf3.deflate`
+          )
+        )
+      ) {
+        if (!sprites[refinedNormalPath]) {
+          sprites[refinedNormalPath] = {
+            type: 'animated',
+            timelines: [],
+          };
+        }
+        sprites[refinedNormalPath].type = 'animated';
+        sprites[refinedNormalPath].timelines.push(
+          `${effectPath}.timeline.amf3.json`
+        );
+      }
+    }
+
+    const effectTracker = logger.progressStart({
+      id: 'Exporting effect images...',
+      max: foundEffectAssets.length,
+    });
+    for (const [fileName, filePath] of foundEffectAssets) {
+      effectTracker.progress();
+      await this.fileReader.readPngAndGenerateOutput(filePath, fileName);
+    }
+    effectTracker.end();
+    const amfTracker = logger.progressStart({
+      id: 'Exporting effect atlases...',
+      max: foundEffectAmf3Assets.length,
+    });
+    for (const [fileName, filePath] of foundEffectAmf3Assets) {
+      amfTracker.progress();
+      await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
+    }
+    amfTracker.end();
+
+    await this.developWriteJson('effect_sprites.json', sprites);
+
+    const spriteEntries = Object.entries(sprites);
+
+    const spriteTracker = logger.progressStart({
+      id: 'Rendering skill effect sprites...',
+      max: spriteEntries.length,
+    });
+
+    for (const [rootPath, { type, timelines, atlas }] of spriteEntries) {
+      spriteTracker.progress();
+      const splittedRootPath = rootPath.split('/');
+      const sheetName = splittedRootPath.pop();
+      await this.processSpritesByAtlases(
+        `${this.ROOT_PATH}/output/assets/${splittedRootPath.join('/')}`,
+        {
+          sheetName,
+          extractAll: true,
+        }
+      );
+    }
+    spriteTracker.end();
+  };
+
+  developWriteJson = async (fileName, content) => {
+    if (IS_DEVELOPMENT) {
+      await writeFile(
+        `${this.ROOT_PATH}/dev_${fileName}`,
+        JSON.stringify(content, null, 2)
+      );
+    }
+  };
+
+  extractGachaOdds = async () => {
+    const gachaFile = JSON.parse(
+      await readFile(`${this.ROOT_PATH}/output/orderedmap/gacha/gacha.json`)
+    );
+
+    const characterTextMap = await this.readCharacterTextFile();
+
+    await mkdir(`${this.ROOT_PATH}/output/orderedmap/gacha_odds/summaries`, {
+      recursive: true,
+    });
+
+    const equipmentTextMap = JSON.parse(
+      (
+        await asyncReadFile(
+          `${this.ROOT_PATH}/output/orderedmap/item/equipment.json`
+        )
+      ).toString()
+    );
+
+    const gachaTracker = logger.progressStart({
+      id: 'Exporting gacha odds table...',
+      max: Object.values(gachaFile).length,
+    });
+    for (const [
+      id,
+      name,
+      ,
+      banner,
+      ,
+      ,
+      ,
+      ,
+      ,
+      ,
+      ,
+      ,
+      ,
+      equipmentFlag,
+      rarity3Path,
+      rarity4Path,
+      rarity5Path,
+      ,
+      ,
+      ,
+      ,
+      ,
+      equipmentRarity3Path,
+      equipmentRarity4Path,
+      equipmentRarity5Path,
+    ] of Object.values(gachaFile)) {
+      gachaTracker.progress();
+      const isEquipment = equipmentFlag === '1';
+      const oddFilePaths = [];
+
+      if (isEquipment) {
+        oddFilePaths.push(
+          `master/gacha_odds/${equipmentRarity3Path}.orderedmap`,
+          `master/gacha_odds/${equipmentRarity4Path}.orderedmap`,
+          `master/gacha_odds/${equipmentRarity5Path}.orderedmap`
+        );
+      } else {
+        oddFilePaths.push(
+          `master/gacha_odds/${rarity3Path}.orderedmap`,
+          `master/gacha_odds/${rarity4Path}.orderedmap`,
+          `master/gacha_odds/${rarity5Path}.orderedmap`
+        );
+      }
+
+      const gachaOddsMap = {
+        name,
+        banner,
+      };
+
+      for (const filePath of oddFilePaths) {
+        const found = await this.digestAndCheckFilePath(filePath);
+        if (found) {
+          const gachaOddsData =
+            await this.fileReader.readMasterTableAndGenerateOutput(
+              found[1],
+              found[0]
+            );
+
+          const oddsList = Object.values(Object.values(gachaOddsData)[0]);
+
+          const oddsInBetterFormat = oddsList.map(
+            ([characterId, rank, odd, isPickup]) => {
+              const characterName = isEquipment
+                ? equipmentTextMap[characterId][0]
+                : characterTextMap[characterId][0];
+
+              return {
+                name: characterName,
+                rank: parseInt(rank, 10),
+                odd: parseInt(odd, 10),
+                isPickup: isPickup === 'true',
+              };
+            }
+          );
+
+          const totalOdds = oddsInBetterFormat.reduce(
+            (acc, cur) => acc + cur.odd,
+            0
+          );
+          gachaOddsMap[`rarity${oddsInBetterFormat[0].rank}`] =
+            oddsInBetterFormat.map((odd) => ({
+              ...odd,
+              localRate: parseFloat(
+                (Math.floor((odd.odd / totalOdds) * 100000) / 1000).toFixed(3)
+              ),
+              rate: parseFloat(
+                (
+                  Math.floor(
+                    (odd.odd / totalOdds) * BASE_ODD_MAP[odd.rank] * 100000
+                  ) / 1000
+                ).toFixed(3)
+              ),
+            }));
+        }
+      }
+
+      await writeFile(
+        `${this.ROOT_PATH}/output/orderedmap/gacha_odds/summaries/${id}_${name}.json`,
+        JSON.stringify(gachaOddsMap, null, 2)
+      );
+    }
+
+    gachaTracker.end();
+  };
+
   development = async (debug) => {
     await this.init();
     await this.buildDigestFileMap();
@@ -1399,15 +1685,137 @@ class WfExtractor {
 
     this.__debug = debug;
 
-    // return this.extractPossibleGeneralAmf3Assets();
+    switch (true) {
+      case /^(sprite) .*/.test(debug): {
+        const destPath = debug.split(' ').slice(1).join(' ');
+        const command = debug.split(' ')[0];
+
+        const foundPng = await this.digestAndCheckFilePath(`${destPath}.png`);
+        if (!foundPng) {
+          logger.log('Image not found.');
+          return null;
+        }
+        const foundAtlas = await this.digestAndCheckFilePath(
+          `${destPath}.atlas.amf3.deflate`
+        );
+        if (!foundAtlas) {
+          logger.log('Atlas not found.');
+          return null;
+        }
+
+        await this.fileReader.readPngAndGenerateOutput(
+          foundPng[1],
+          foundPng[0]
+        );
+        await this.fileReader.readGeneralAndCreateOutput(
+          foundAtlas[1],
+          foundAtlas[0]
+        );
+
+        await this.processSpritesByAtlases(
+          `${this.ROOT_PATH}/output/assets/${destPath
+            .split('/')
+            .slice(0, -1)
+            .join('/')}`,
+          {
+            extractAll: true,
+          }
+        );
+
+        return null;
+        return null;
+      }
+      case /^(search) .*/.test(debug): {
+        const destPath = debug.split(' ').slice(1).join(' ');
+
+        const searchTracker = logger.progressStart({
+          id: 'Searching assets...',
+          max: COMMON_FILE_FORMAT.length + 6,
+        });
+        for (const possibleFormat of [
+          '.orderedmap',
+          '.atlas.amf3',
+          '.timeline.amf3',
+          '.frame.amf3',
+          '.parts.amf3',
+          '.atf',
+          ...COMMON_FILE_FORMAT,
+        ]) {
+          searchTracker.progress();
+          const curPath = `${destPath}${possibleFormat}`;
+          const curDigestPath = `${destPath}${possibleFormat}.deflate`;
+
+          const found = await this.digestAndCheckFilePath(curPath);
+          const digestFound = await this.digestAndCheckFilePath(curDigestPath);
+
+          if (found) {
+            logger.log(`Asset found at ${curPath}`);
+          }
+          if (digestFound) {
+            logger.log(`Asset found at ${curDigestPath}`);
+          }
+        }
+        searchTracker.end();
+
+        return null;
+      }
+      case /^(master|image|audio|general) .*/.test(debug): {
+        const destPath = debug.split(' ').slice(1).join(' ');
+        const command = debug.split(' ')[0];
+        const found = await this.digestAndCheckFilePath(destPath);
+
+        logger.log(JSON.stringify(found || {}));
+
+        if (!found) {
+          logger.log('Asset not found for path.');
+
+          return null;
+        }
+
+        switch (command) {
+          case 'master': {
+            return this.fileReader.readMasterTableAndGenerateOutput(
+              found[1],
+              found[0]
+            );
+          }
+          case 'image': {
+            return this.fileReader.readPngAndGenerateOutput(found[1], found[0]);
+          }
+          case 'audio': {
+            return this.fileReader.readMp3AndGenerateOutput(found[1], found[0]);
+          }
+          default: {
+            return this.fileReader.readGeneralAndCreateOutput(
+              found[1],
+              found[0]
+            );
+          }
+        }
+      }
+      default: {
+        console.log('');
+      }
+    }
 
     const found = await this.digestAndCheckFilePath(debug);
 
     logger.log(JSON.stringify(found || {}));
 
+    // return this.extractGachaOdds();
+
+    // return this.extractSkillEffects();
+
     if (found) {
       try {
-        await this.fileReader.readGeneralAndCreateOutput(found[1], found[0]);
+        if (/orderedmap/.test(debug)) {
+          await this.fileReader.readMasterTableAndGenerateOutput(
+            found[1],
+            found[0]
+          );
+        } else {
+          await this.fileReader.readGeneralAndCreateOutput(found[1], found[0]);
+        }
       } catch (err) {
         console.log(err);
       }

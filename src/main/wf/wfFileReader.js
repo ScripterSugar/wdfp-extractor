@@ -529,6 +529,39 @@ export default class WfFileReader {
     return deduplicatedPaths;
   };
 
+  readMasterTableAndGenerateOutput = async (
+    filePath,
+    savePath,
+    { rootDir = this._rootDir } = {}
+  ) => {
+    const masterTableContent = await openAndReadOrderedMap(filePath);
+
+    await writeFileRecursive(
+      `${rootDir}/output/orderedmap/${savePath
+        .replace('master/', '')
+        .replace('.orderedmap', '.json')}`,
+      this.stringifyMasterTable(masterTableContent)
+    );
+
+    return masterTableContent;
+  };
+
+  stringifyMasterTable = (masterTableJson) =>
+    JSON.stringify(
+      masterTableJson,
+      (k, v) => {
+        if (v instanceof Array) return JSON.stringify(v);
+        return v;
+      },
+      4
+    )
+      .replace(/"\[/g, '[')
+      .replace(/\]"/g, ']')
+      .replace(/\[\\"/g, '["')
+      .replace(/\\"\]/g, '"]')
+      .replace(/\\",\\"/g, '","')
+      .replace(/\\",\\\[/g, '","[');
+
   readBootFcAndGenerateOutput = async ({ rootDir = this._rootDir } = {}) => {
     const openedFile = fs.readFileSync(`${rootDir}/swf/scripts/boot_ffc6.as`);
 
@@ -538,7 +571,8 @@ export default class WfFileReader {
       ([, innerPath]) => innerPath
     );
     const refinedPaths = paths.map(
-      (innerPath) => `master${innerPath}.orderedmap`
+      (innerPath) =>
+        `master${innerPath[0] === '/' ? innerPath : `/${innerPath}`}.orderedmap`
     );
     const digestedPaths = await Promise.all(refinedPaths.map(digestWfFileName));
     const digestedPathsOriginFileNameMap = digestedPaths.reduce(
@@ -589,19 +623,7 @@ export default class WfFileReader {
       const orderedMapDataJson = await openAndReadOrderedMap(
         orederedMapFilePath
       );
-      const stringifiedJson = JSON.stringify(
-        orderedMapDataJson,
-        (k, v) => {
-          if (v instanceof Array) return JSON.stringify(v);
-          return v;
-        },
-        4
-      )
-        .replace(/"\[/g, '[')
-        .replace(/\]"/g, ']')
-        .replace(/\[\\"/g, '["')
-        .replace(/\\"\]/g, '"]')
-        .replace(/\\",\\"/g, '","');
+      const stringifiedJson = this.stringifyMasterTable(orderedMapDataJson);
 
       Array.from(stringifiedJson.matchAll(POSSIBLE_PATH_REGEX)).forEach(
         ([possiblePath]) => {

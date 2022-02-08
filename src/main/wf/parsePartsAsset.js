@@ -6,7 +6,8 @@ const parsePartsAsset = (rawParts) => {
     g: graphics,
     a: imageMaxNumbers,
     o: movieMaxNumbers,
-  };
+    t: matrices,
+  } = rawParts;
 }
 
 const parseGraphics = (rawGraphics) => {
