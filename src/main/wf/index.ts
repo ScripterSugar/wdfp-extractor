@@ -989,7 +989,13 @@ class WfExtractor {
 
   processSpritesByAtlases = async (
     spritePath,
-    { animate, sheetName = 'sprite_sheet', timelineRoot, extractAll } = {}
+    {
+      animate,
+      sheetName = 'sprite_sheet',
+      timelineRoot,
+      extractAll,
+      scale,
+    } = {}
   ) => {
     const timelineName = timelineRoot || 'pixelart';
 
@@ -1003,6 +1009,7 @@ class WfExtractor {
       atlases: spriteAtlases,
       destPath: `${spritePath}/${sheetName}`,
       extractAll,
+      scale,
     });
 
     if (!images) return;
@@ -1687,8 +1694,19 @@ class WfExtractor {
 
     switch (true) {
       case /^(sprite) .*/.test(debug): {
-        const destPath = debug.split(' ').slice(1).join(' ');
+        const args = debug.split(' ').slice(1);
+        const destPath = args.pop();
         const command = debug.split(' ')[0];
+
+        let scale = 1;
+
+        args.forEach((arg, idx) => {
+          if (/scale/.test(arg)) {
+            scale = parseFloat(args[idx + 1] || 1);
+          }
+        });
+
+        console.log(scale);
 
         const foundPng = await this.digestAndCheckFilePath(`${destPath}.png`);
         if (!foundPng) {
@@ -1719,6 +1737,7 @@ class WfExtractor {
             .join('/')}`,
           {
             extractAll: true,
+            scale,
           }
         );
 

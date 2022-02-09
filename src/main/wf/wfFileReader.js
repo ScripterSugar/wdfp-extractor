@@ -309,6 +309,7 @@ export default class WfFileReader {
     atlases,
     destPath: _destPath,
     generateGif,
+    scale,
     extractAll = false,
   } = {}) => {
     let needGenerateGif;
@@ -348,14 +349,37 @@ export default class WfFileReader {
             cacheResolver = resolve;
           });
           if (r) {
-            imageBuffer = await sharp(sprite)
-              .extract({ left: x, top: y, width: w, height: h })
-              .rotate(-90)
-              .toBuffer();
+            if (scale && scale !== 1) {
+              imageBuffer = await sharp(sprite)
+                .extract({ left: x, top: y, width: w, height: h })
+                .resize({
+                  width: w * scale,
+                  height: h * scale,
+                  fit: 'inside',
+                  kernel: 'nearest',
+                })
+                .rotate(-90)
+                .toBuffer();
+            } else {
+              imageBuffer = await sharp(sprite)
+                .extract({ left: x, top: y, width: w, height: h })
+                .rotate(-90)
+                .toBuffer();
+            }
             args.w = h;
             args.h = w;
             args.x = y;
             args.y = x;
+          } else if (scale && scale !== 1) {
+            imageBuffer = await sharp(sprite)
+              .extract({ left: x, top: y, width: w, height: h })
+              .resize({
+                width: w * scale,
+                height: h * scale,
+                fit: 'inside',
+                kernel: 'nearest',
+              })
+              .toBuffer();
           } else {
             imageBuffer = await sharp(sprite)
               .extract({ left: x, top: y, width: w, height: h })
