@@ -59,7 +59,7 @@ Once the extraction is done, you can find inflated asset files located in the ou
 
 ## Contributing
 
-I won't actively manage this repository as far as it works for me, so if you're having trouble using the tool on your side, in most cases you'll have to fix the problem yourself. You can still issue the tickets, but do not expect me to actively fix it. Please feel free to open any PR.
+I won't actively troubleshoot the bugs as far as it works for me, so if you're having trouble using the tool on your side, in most cases you'll have to fix the problem yourself, or at least provide me all the details about your environments, runtime context, ETC. Please include all the details when you open issue here. Also feel free to open any PR.
 
 If you want more asset coverage added to tool, please provide the details about assets you want to export, including file formats, asset path, format of data, etc.
 
