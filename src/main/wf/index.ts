@@ -995,6 +995,7 @@ class WfExtractor {
       timelineRoot,
       extractAll,
       scale,
+      cropProps = {},
     } = {}
   ) => {
     const timelineName = timelineRoot || 'pixelart';
@@ -1010,6 +1011,7 @@ class WfExtractor {
       destPath: `${spritePath}/${sheetName}`,
       extractAll,
       scale,
+      ...cropProps,
     });
 
     if (!images) return;
@@ -1682,6 +1684,235 @@ class WfExtractor {
     gachaTracker.end();
   };
 
+  extractEXBoostMasterTable = async () => {
+    try {
+      const exBoosts = Object.values(
+        JSON.parse(
+          await readFile(
+            `${this.ROOT_PATH}/output/orderedmap/ex_boost/ex_boost.json`
+          )
+        )
+      );
+
+      const exBoostTracker = await logger.progressStart({
+        id: 'Extracting ex boost odds table...',
+        max: exBoosts.length,
+      });
+
+      for (const exBoost of exBoosts) {
+        exBoostTracker.progress();
+        const exBoostMasterPath = `master/ex_boost/odds/lots_combination/${exBoost[1]}.orderedmap`;
+
+        const found = await this.digestAndCheckFilePath(exBoostMasterPath);
+        await this.fileReader.readMasterTableAndGenerateOutput(
+          found[1],
+          found[0]
+        );
+
+        await this.fileReader.readMasterTableAndGenerateOutput(
+          ...(
+            await this.digestAndCheckFilePath(
+              `master/ex_boost/odds/ability/${exBoost[1]}_a.orderedmap`
+            )
+          ).reverse()
+        );
+        await this.fileReader.readMasterTableAndGenerateOutput(
+          ...(
+            await this.digestAndCheckFilePath(
+              `master/ex_boost/odds/ability/${exBoost[1]}_b.orderedmap`
+            )
+          ).reverse()
+        );
+        await this.fileReader.readMasterTableAndGenerateOutput(
+          ...(
+            await this.digestAndCheckFilePath(
+              `master/ex_boost/odds/status/${exBoost[1]}.orderedmap`
+            )
+          ).reverse()
+        );
+      }
+
+      exBoostTracker.end();
+    } catch (err) {
+      logger.log(err);
+      logger.log('Skipping EX Boost odds extraction');
+    }
+  };
+
+  constructReadableExBoostOddsTable = async () => {
+    const abilities = JSON.parse(
+      await readFile(
+        `${this.ROOT_PATH}/output/orderedmap/ex_boost/ex_ability.json`
+      )
+    );
+    const statuses = JSON.parse(
+      await readFile(
+        `${this.ROOT_PATH}/output/orderedmap/ex_boost/ex_status.json`
+      )
+    );
+    const exBoosts = Array.from(
+      new Set(
+        Object.values(
+          JSON.parse(
+            await readFile(
+              `${this.ROOT_PATH}/output/orderedmap/ex_boost/ex_boost.json`
+            )
+          )
+        ).map(([, boostId]) => boostId)
+      )
+    );
+
+    const boostOddsMap = {};
+
+    for (const boostId of exBoosts) {
+      const lotsCombination = JSON.parse(
+        await readFile(
+          `${this.ROOT_PATH}/output/orderedmap/ex_boost/odds/lots_combination/${boostId}.json`
+        )
+      );
+      const statusPool = JSON.parse(
+        await readFile(
+          `${this.ROOT_PATH}/output/orderedmap/ex_boost/odds/status/${boostId}.json`
+        )
+      );
+      const abilityPoolA = JSON.parse(
+        await readFile(
+          `${this.ROOT_PATH}/output/orderedmap/ex_boost/odds/ability/${boostId}_a.json`
+        )
+      );
+      const abilityPoolB = JSON.parse(
+        await readFile(
+          `${this.ROOT_PATH}/output/orderedmap/ex_boost/odds/ability/${boostId}_b.json`
+        )
+      );
+
+      boostOddsMap[boostId] = {
+        combinations: {
+          totalWeight: 0,
+        },
+        status: {
+          totalWeight: 0,
+        },
+        abilityA: {
+          totalWeight: 0,
+        },
+        abilityB: {
+          totalWeight: 0,
+        },
+      };
+
+      Object.values(lotsCombination[`${boostId}`])
+        .map(([weight, , status, abi1Flag, ability1, abi2Flag, ability2]) => {
+          boostOddsMap[boostId].combinations.totalWeight += parseFloat(weight);
+
+          return {
+            weight: parseFloat(weight),
+            status,
+            abilityA: /_a$/.test(ability1) || /_a$/.test(ability2),
+            abilityB: /_b$/.test(ability1) || /_b$/.test(ability2),
+          };
+        })
+        .forEach(({ weight, status, abilityA, abilityB }) => {
+          const combinationKey = `status${(abilityA && '_a') || ''}${
+            (abilityB && '_b') || ''
+          }`;
+          if (!boostOddsMap[boostId].combinations[combinationKey]) {
+            boostOddsMap[boostId].combinations[combinationKey] = {
+              weight: 0,
+              rate: 0,
+            };
+          }
+
+          boostOddsMap[boostId].combinations[combinationKey].weight += weight;
+          boostOddsMap[boostId].combinations[combinationKey].rate += parseFloat(
+            (
+              (weight / boostOddsMap[boostId].combinations.totalWeight) *
+              100
+            ).toFixed(3)
+          );
+        });
+
+      Object.values(statusPool[boostId])
+        .map(([statusId, weight]) => {
+          boostOddsMap[boostId].status.totalWeight += parseFloat(weight);
+          return {
+            weight: parseFloat(weight),
+            statusId,
+          };
+        })
+        .forEach(({ weight, statusId }) => {
+          const statusName = statuses[statusId][0];
+          const hp = statuses[statusId][1];
+          const atk = statuses[statusId][2];
+
+          boostOddsMap[boostId].status[statusName] = {
+            weight,
+            rate: parseFloat(
+              (
+                (weight / boostOddsMap[boostId].status.totalWeight) *
+                100
+              ).toFixed(3)
+            ),
+            hp,
+            atk,
+          };
+        });
+
+      Object.values(abilityPoolA[`${boostId}_a`])
+        .map(([abilityId, weight]) => {
+          boostOddsMap[boostId].abilityA.totalWeight += parseFloat(weight);
+          return {
+            weight: parseFloat(weight),
+            abilityId,
+          };
+        })
+        .forEach(({ weight, abilityId }) => {
+          const abilityAName = abilities[abilityId][0];
+          const abilityAPower = parseFloat(abilities[abilityId][46]) / 1000;
+
+          boostOddsMap[boostId].abilityA[abilityAName] = {
+            weight,
+            rate: parseFloat(
+              (
+                (weight / boostOddsMap[boostId].abilityA.totalWeight) *
+                100
+              ).toFixed(3)
+            ),
+            power: abilityAPower,
+          };
+        });
+
+      Object.values(abilityPoolB[`${boostId}_b`])
+        .map(([abilityId, weight]) => {
+          boostOddsMap[boostId].abilityB.totalWeight += parseFloat(weight);
+          return {
+            weight: parseFloat(weight),
+            abilityId,
+          };
+        })
+        .forEach(({ weight, abilityId }) => {
+          const abilityBName = abilities[abilityId][0];
+          const abilityBPower = parseFloat(abilities[abilityId][46]) / 1000;
+
+          boostOddsMap[boostId].abilityB[abilityBName] = {
+            weight,
+            rate: parseFloat(
+              (
+                (weight / boostOddsMap[boostId].abilityB.totalWeight) *
+                100
+              ).toFixed(3)
+            ),
+            power: abilityBPower,
+          };
+        });
+    }
+
+    await writeFile(
+      `${this.ROOT_PATH}/output/orderedmap/ex_boost/odds_summary.json`,
+      JSON.stringify(boostOddsMap, null, 4)
+    );
+  };
+
   development = async (debug) => {
     await this.init();
     await this.buildDigestFileMap();
@@ -1693,20 +1924,26 @@ class WfExtractor {
     this.__debug = debug;
 
     switch (true) {
+      case /exboost/.test(debug): {
+        await this.extractEXBoostMasterTable();
+        return this.constructReadableExBoostOddsTable();
+      }
       case /^(sprite) .*/.test(debug): {
         const args = debug.split(' ').slice(1);
         const destPath = args.pop();
         const command = debug.split(' ')[0];
 
         let scale = 1;
+        let eliyaBot = false;
 
         args.forEach((arg, idx) => {
           if (/scale/.test(arg)) {
             scale = parseFloat(args[idx + 1] || 1);
           }
+          if (/eliyabot/.test(arg)) {
+            eliyaBot = true;
+          }
         });
-
-        console.log(scale);
 
         const foundPng = await this.digestAndCheckFilePath(`${destPath}.png`);
         if (!foundPng) {
@@ -1730,6 +1967,8 @@ class WfExtractor {
           foundAtlas[0]
         );
 
+        const sheetName = destPath.split('/').pop();
+
         await this.processSpritesByAtlases(
           `${this.ROOT_PATH}/output/assets/${destPath
             .split('/')
@@ -1738,6 +1977,10 @@ class WfExtractor {
           {
             extractAll: true,
             scale,
+            sheetName,
+            cropProps: {
+              eliyaBot,
+            },
           }
         );
 

@@ -311,6 +311,7 @@ export default class WfFileReader {
     generateGif,
     scale,
     extractAll = false,
+    eliyaBot,
   } = {}) => {
     let needGenerateGif;
     let dest;
@@ -411,7 +412,16 @@ export default class WfFileReader {
           saveNameRoot = frameId.padStart(4, '0');
         }
 
-        const saveName = `${saveNameRoot}.png`;
+        let saveName = `${saveNameRoot}.png`;
+
+        if (eliyaBot) {
+          if (/equipment/.test(name)) {
+            destPath = `${this._rootDir}/output/assets/item/eliyaBot`;
+          } else if (/ability_soul/.test(name)) {
+            destPath = `${this._rootDir}/output/assets/item/eliyaBot`;
+            saveName = `${saveNameRoot}_soul.png`;
+          }
+        }
 
         if (begin && end) {
           const frameSqeunce = parseFloat(saveName.replace(/[^0-9]/g, ''));

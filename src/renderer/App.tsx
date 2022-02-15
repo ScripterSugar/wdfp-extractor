@@ -869,7 +869,8 @@ const AppContent = () => {
                 </Typography>
                 <IndicatorTypo>
                   usage: [command] [filepath] <br />
-                  commands: [master | general | image | audio | sprite]
+                  commands: [master | general | image | audio | sprite | search
+                  | exboost]
                 </IndicatorTypo>
               </LayoutFlexColumn>
               <textarea
