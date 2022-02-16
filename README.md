@@ -52,6 +52,7 @@ Once the extraction is done, you can find inflated asset files located in the ou
 - Cropped sprites based on atlases and sprite sheet
 - Animated images generated from sprites (Character images only)
 - Skill/Action descriptors for characters / bosses / items, including all the details about the skills.
+- Summarized Gacha, EX Boost rates table.
 
 ## Planned feature
 - Support extraction of ability texts
