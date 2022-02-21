@@ -75,6 +75,7 @@ ipcMain.on(
     rootDir,
     {
       region,
+      skipDevicePull,
       extractMaster,
       extractCharacterImage,
       extractMiscImage,
@@ -124,6 +125,10 @@ ipcMain.on(
         if (extractionPhase <= 0) {
           await wfExtractor.init();
           extractionPhase = 1;
+        }
+
+        if (skipDevicePull) {
+          extractionPhase = 4.5;
         }
 
         if (extractionPhase <= 1) {

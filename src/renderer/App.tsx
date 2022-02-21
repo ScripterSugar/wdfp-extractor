@@ -217,6 +217,7 @@ const AppContent = () => {
   );
   const [options, setOptions] = usePermanentState(
     {
+      skipDevicePull: false,
       extractMaster: true,
       parseActionScript: true,
       extractCharacterImage: true,
@@ -237,6 +238,7 @@ const AppContent = () => {
         return JSON.parse(val);
       } catch (err) {
         return {
+          skipDevicePull: false,
           extractMaster: true,
           parseActionScript: true,
           extractCharacterImage: true,
@@ -716,6 +718,22 @@ const AppContent = () => {
         </Typography>
         <LayoutFlexColumn>
           <LayoutFlexDivideHalf>
+            <LayoutFlexSpaceBetween>
+              <LayoutFlexColumn>
+                <Typography>Skip Asset copy / Swf decompile</Typography>
+                <IndicatorTypo>
+                  Do not turn this on if its initial extraction.
+                </IndicatorTypo>
+              </LayoutFlexColumn>
+              <Switch
+                value={options.skipDevicePull}
+                onClick={() =>
+                  onChangeOptions('skipDevicePull', !options.skipDevicePull)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+          </LayoutFlexDivideHalf>
+          <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
             <LayoutFlexSpaceBetween>
               <Typography>Extract master table</Typography>
               <Switch

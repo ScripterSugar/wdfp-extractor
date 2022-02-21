@@ -659,11 +659,26 @@ export default class WfFileReader {
       );
       const stringifiedJson = this.stringifyMasterTable(orderedMapDataJson);
 
-      Array.from(stringifiedJson.matchAll(POSSIBLE_PATH_REGEX)).forEach(
-        ([possiblePath]) => {
-          possibleFilePaths[possiblePath] = true;
-        }
+      await Promise.all(
+        Array.from(stringifiedJson.matchAll(POSSIBLE_PATH_REGEX)).map(
+          async ([possiblePath]) => {
+            possibleFilePaths[possiblePath] = true;
+
+            const possibleMasterPath = `master/${possiblePath}.orderedmap`;
+            const foundMasterInMaster = await this.checkDigestPath(
+              digestWfFileName(possibleMasterPath)
+            );
+
+            if (foundMasterInMaster) {
+              await this.readMasterTableAndGenerateOutput(
+                foundMasterInMaster,
+                possibleMasterPath
+              );
+            }
+          }
+        )
       );
+
       const jsonFilePath = `${fileRootName}.json`;
       logger.devLog(`Exporting orderedmap to JSON ${jsonFilePath}`);
       await writeFileRecursive(jsonFilePath, stringifiedJson);
