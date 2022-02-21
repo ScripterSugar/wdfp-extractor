@@ -774,7 +774,7 @@ const AppContent = () => {
             </LayoutFlexSpaceBetween>
             <LayoutFlexSpaceBetween>
               <LayoutFlexColumn>
-                <Typography>Process image assets by atlas</Typography>
+                <Typography>Process character image assets by atlas</Typography>
                 <IndicatorTypo>Crop spritesheets / Generate GIF</IndicatorTypo>
               </LayoutFlexColumn>
               <Switch
