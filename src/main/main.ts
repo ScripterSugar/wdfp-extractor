@@ -204,7 +204,6 @@ ipcMain.on(
             await wfExtractor.extractPossibleImageAssets({
               cropSprites: processAtlasMisc,
             });
-            await wfExtractor.extractSkillEffects();
           }
 
           extractionPhase = 7.5;

@@ -1449,7 +1449,6 @@ class WfExtractor {
           ...normalPath.split('/').slice(0, -1),
           'sprite_sheet',
         ].join('/');
-        console.log(effectPath, refinedEffectPath, refinedNormalPath);
       }
 
       pushExist(
@@ -1944,6 +1943,10 @@ class WfExtractor {
             eliyaBot = true;
           }
         });
+
+        if (eliyaBot) {
+          await this.fileReader.buildSpriteBackgrounds(scale);
+        }
 
         const foundPng = await this.digestAndCheckFilePath(`${destPath}.png`);
         if (!foundPng) {

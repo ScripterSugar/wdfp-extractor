@@ -13,6 +13,16 @@ import { digestWfFileName } from './digest';
 import logger from './logger';
 import { ELIGIBLE_PATH_PREFIXES, POSSIBLE_PATH_REGEX } from './constants';
 
+const EQUIPMENT_BACKGROUNDS = {
+  1: 'item_white',
+  2: 'item_bronze',
+  3: 'item_silver',
+  4: 'item_gold',
+  5: 'item_rainbow',
+};
+
+const IMAGE_CACHE = {};
+
 function bufferToStream(binary) {
   const readableInstanceStream = new Readable({
     read() {
@@ -304,6 +314,93 @@ export default class WfFileReader {
     });
   };
 
+  loadOrBuildEquipmentMap = async () => {
+    if (this.equipmentMap) return this.equipmentMap;
+
+    try {
+      const equipments = JSON.parse(
+        await readFile(`${this._rootDir}/output/orderedmap/item/equipment.json`)
+      );
+
+      this.equipmentMap = Object.entries(equipments).reduce(
+        (acc, [id, item]) => ({
+          ...acc,
+          [item[0]]: {
+            id,
+            itemId: item[0],
+            name: item[1],
+            description: item[7],
+            maxLevel: parseInt(item[8], 10),
+            rarity: parseInt(item[10], 10),
+            _raw: item,
+          },
+        })
+      );
+
+      return this.equipmentMap;
+    } catch (err) {
+      console.log(err);
+      return {};
+    }
+  };
+
+  buildSpriteBackgrounds = async (scale) => {
+    const frameFile = await readFile(
+      `${this._rootDir}/output/assets/scene/general/sprite_sheet/thumbnail-assets/ability_soul_thumbnail_inner_frame.png`
+    );
+
+    const frame = await sharp(frameFile)
+      .resize({
+        width: 24 * scale,
+        height: 24 * scale,
+        fit: 'inside',
+        kernel: 'nearest',
+      })
+      .toBuffer();
+
+    IMAGE_CACHE.ability_soul_thumbnail_inner_frame = frame;
+    await Promise.all(
+      Object.entries(EQUIPMENT_BACKGROUNDS).map(
+        async ([rarity, backgroundId]) => {
+          const bgFile = await readFile(
+            `${this._rootDir}/output/assets/scene/general/sprite_sheet/thumbnail-assets/${backgroundId}.png`
+          );
+
+          const bg = await sharp(bgFile)
+            .resize({
+              width: 24 * scale,
+              height: 24 * scale,
+              fit: 'inside',
+              kernel: 'nearest',
+            })
+            .toBuffer();
+          IMAGE_CACHE[backgroundId] = bg;
+
+          const resizedFrame = await sharp(frame)
+            .resize({
+              width: 24 * scale + 2 * scale,
+              height: 24 * scale + 2 * scale,
+              fit: 'inside',
+              kernel: 'nearest',
+            })
+            .toBuffer();
+
+          await sharp(bg)
+            .extend({
+              top: 1 * scale,
+              bottom: 1 * scale,
+              right: 1 * scale,
+              left: 1 * scale,
+            })
+            .composite([{ input: resizedFrame, gravity: 'center' }])
+            .toFile(`${this._rootDir}/output/assets/item/rarity_${rarity}.png`);
+
+          return true;
+        }
+      )
+    );
+  };
+
   cropSpritesFromAtlas = async ({
     sprite,
     atlases,
@@ -420,6 +517,36 @@ export default class WfFileReader {
           } else if (/ability_soul/.test(name)) {
             destPath = `${this._rootDir}/output/assets/item/eliyaBot`;
             saveName = `${saveNameRoot}_soul.png`;
+          }
+
+          if (/equipment|ability_soul/.test(name)) {
+            const equipmentMap = await this.loadOrBuildEquipmentMap();
+
+            const isSoul = /ability_soul/.test(name);
+            const equipmentInfo = equipmentMap[saveNameRoot];
+            const { rarity } = equipmentInfo || { rarity: 1 };
+            const backgroundId = EQUIPMENT_BACKGROUNDS[rarity];
+
+            const background = IMAGE_CACHE[backgroundId];
+            const soulFrame = IMAGE_CACHE.ability_soul_thumbnail_inner_frame;
+
+            if (isSoul) {
+              imageBuffer = await sharp({
+                create: {
+                  width: 24 * scale,
+                  height: 24 * scale,
+                  channels: 4,
+                  background: { r: 0, g: 0, b: 0, alpha: 0 },
+                },
+              })
+                .png()
+                .composite([{ input: imageBuffer, gravity: 'center' }]);
+            } else {
+              imageBuffer = await sharp(background).composite([
+                // ...(isSoul ? [{ input: soulFrame }] : []),
+                { input: imageBuffer, gravity: 'center' },
+              ]);
+            }
           }
         }
 
