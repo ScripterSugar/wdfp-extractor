@@ -715,10 +715,9 @@ class WfExtractor {
   extractMasterTable = async () => {
     logger.log('Start extracting orderedMaps...');
 
-    const { masterTableFiles, filePaths } =
-      await this.fileReader.readBootFcAndGenerateOutput({
-        rootDir: this.ROOT_PATH,
-      });
+    const { filePaths } = await this.fileReader.readBootFcAndGenerateOutput({
+      rootDir: this.ROOT_PATH,
+    });
 
     this.filePaths = filePaths;
 

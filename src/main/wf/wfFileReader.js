@@ -797,9 +797,17 @@ export default class WfFileReader {
             );
 
             if (foundMasterInMaster) {
-              await this.readMasterTableAndGenerateOutput(
-                foundMasterInMaster,
-                possibleMasterPath
+              const innerJson = this.stringifyMasterTable(
+                await this.readMasterTableAndGenerateOutput(
+                  foundMasterInMaster,
+                  possibleMasterPath
+                )
+              );
+
+              Array.from(innerJson.matchAll(POSSIBLE_PATH_REGEX)).forEach(
+                ([innerPath]) => {
+                  possibleFilePaths[innerPath] = true;
+                }
               );
             }
           }
