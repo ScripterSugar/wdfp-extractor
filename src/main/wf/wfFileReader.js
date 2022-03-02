@@ -325,7 +325,7 @@ export default class WfFileReader {
       this.equipmentMap = Object.entries(equipments).reduce(
         (acc, [id, item]) => ({
           ...acc,
-          [item[0]]: {
+          [item[6].split('/').pop()]: {
             id,
             itemId: item[0],
             name: item[1],
@@ -334,7 +334,8 @@ export default class WfFileReader {
             rarity: parseInt(item[10], 10),
             _raw: item,
           },
-        })
+        }),
+        {}
       );
 
       return this.equipmentMap;
@@ -424,6 +425,9 @@ export default class WfFileReader {
     }
     const xyCache = {};
     const dirCache = {};
+    if (eliyaBot) {
+      await this.loadOrBuildEquipmentMap();
+    }
 
     let targetImages = [];
     const images = await Promise.all(
@@ -512,21 +516,15 @@ export default class WfFileReader {
         let saveName = `${saveNameRoot}.png`;
 
         if (eliyaBot) {
-          if (/equipment/.test(name)) {
-            destPath = `${this._rootDir}/output/assets/item/eliyaBot`;
-          } else if (/ability_soul/.test(name)) {
-            destPath = `${this._rootDir}/output/assets/item/eliyaBot`;
-            saveName = `${saveNameRoot}_soul.png`;
-          }
-
           if (/equipment|ability_soul/.test(name)) {
+            destPath = `${this._rootDir}/output/assets/item/eliyaBot`;
             const equipmentMap = await this.loadOrBuildEquipmentMap();
 
             const isSoul = /ability_soul/.test(name);
             const equipmentInfo = equipmentMap[saveNameRoot];
-            const { rarity } = equipmentInfo || { rarity: 1 };
+            const { rarity, itemId } = equipmentInfo || { rarity: 1 };
             const backgroundId = EQUIPMENT_BACKGROUNDS[rarity];
-
+            saveName = `${itemId}${(isSoul && '_soul') || ''}.png`;
             const background = IMAGE_CACHE[backgroundId];
             const soulFrame = IMAGE_CACHE.ability_soul_thumbnail_inner_frame;
 

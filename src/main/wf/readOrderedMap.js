@@ -99,24 +99,6 @@ const readOrderedMap = async (mapping) => {
   }
 };
 
-/* eslint-disable */
-const test_1 = {
-  "0": ["70000","0","alterite_r3","1","alterite_r3_a","1","alterite_r3_b","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)",""],
-  "1": ["10000","0","alterite_r3","1","alterite_r3_a","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)",""],
-  "2": ["10000","0","alterite_r3","1","alterite_r3_b","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)",""],
-  "3": ["10000","0","alterite_r3","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)",""]
-};
-
-const testObject = {
-  "alterite_r3": {
-      "0": ["70000","0","alterite_r3","1","alterite_r3_a","1","alterite_r3_b","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)",""],
-      "1": ["10000","0","alterite_r3","1","alterite_r3_a","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)",""],
-      "2": ["10000","0","alterite_r3","1","alterite_r3_b","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)",""],
-      "3": ["10000","0","alterite_r3","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)","","(None)",""]
-  }
-};
-/* eslint-enable */
-
 const createOrderedMap = async (targetObject) => {
   const keys = Object.keys(targetObject).map((key) => Buffer.from(key));
 
@@ -131,21 +113,35 @@ const createOrderedMap = async (targetObject) => {
   let keyOffset = 0;
   let valueOffset = 0;
 
-  const entryOffsets = keys.map((key, idx) => {
-    const value = values[idx];
+  const entryOffsets = keys
+    .map((key, idx) => {
+      const value = values[idx];
 
-    keyOffset += key.length;
-    valueOffset += value.length;
+      keyOffset += key.length;
+      valueOffset += value.length;
 
-    const entryBuffer = Buffer.alloc(8);
+      const entryBuffer = Buffer.alloc(8);
 
-    entryBuffer.writeInt32LE(keyOffset, 0);
-    entryBuffer.writeInt32LE(valueOffset, 4);
+      entryBuffer.writeInt32LE(keyOffset, 0);
+      entryBuffer.writeInt32LE(valueOffset, 4);
 
-    return entryBuffer;
-  }).reduce((acc, buf) => Buffer.concat([acc, buf]), Buffer.alloc(0));
+      return entryBuffer;
+    })
+    .reduce((acc, buf) => Buffer.concat([acc, buf]), Buffer.alloc(0));
 
-  console.log(entryOffsets);
+  const entriesCount = Buffer.alloc(4);
+
+  entriesCount.writeInt32LE(keys.length);
+
+  const headerBuffer = Buffer.concat([entriesCount, entryOffsets, ...keys]);
+  const headerData = await asyncDeflate(headerBuffer);
+
+  const headerLength = Buffer.alloc(4);
+  headerLength.writeInt32LE(headerData.length);
+
+  const data = Buffer.concat([headerLength, headerData, ...values]);
+
+  return data;
 };
 
 const openAndReadOrderedMap = async (fileName) => {
