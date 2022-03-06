@@ -297,7 +297,7 @@ class WfExtractor {
       `${ADB_PATH} -s ${this.DEVICE_ID} root`
     );
 
-    if (/cannot run as root/.test(adbRootQuery)) {
+    if (/cannot run as root|restarting adbd as root/.test(adbRootQuery)) {
       logger.log('WARNING: Adb connected as non-root permission.');
       this.ADB_ROOT = false;
     } else {
