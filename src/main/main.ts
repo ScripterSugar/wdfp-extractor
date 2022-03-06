@@ -45,6 +45,30 @@ ipcMain.on('updateApp', async (event, openPath) => {
   autoUpdater.quitAndInstall();
 });
 
+ipcMain.on('clearMeta', async (event, rootDir, targetData) => {
+  const wfExtractor = new WfExtractor({
+    rootDir,
+  });
+
+  await wfExtractor.init();
+
+  switch (targetData) {
+    case 'characterSprites': {
+      await wfExtractor.markMetaData({
+        spriteProcessedLock: [],
+        specialSpriteProcessedLock: [],
+      });
+
+      logger.log('Character sprites cache cleared.');
+
+      return null;
+    }
+    default: {
+      return null;
+    }
+  }
+});
+
 class ExtractionProcessor {
   packetResolver: (any) => void;
 

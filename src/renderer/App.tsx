@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import settingsIcon from '../../assets/settings.svg';
 import extractIcon from '../../assets/extract.svg';
 import viewerIcon from '../../assets/viewer.svg';
+import trashIcon from '../../assets/trash.svg';
 import folderIcon from '../../assets/folder.svg';
 import theoSpin from '../../assets/theospin.png';
 import theoSpecial from '../../assets/theoSpecial.gif';
@@ -224,6 +225,7 @@ const AppContent = () => {
     'LATEST_COMMAND_INPUT'
   );
   const [commandInput, setCommandInput] = useState('');
+  const [openTrashModal, setOpenTrashModal] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionError, setExtractionError] = useState(null);
   const [appVersion, setAppVersion] = useState('UNKNOWN');
@@ -585,6 +587,13 @@ const AppContent = () => {
     setCommandInput(latestCommandInput);
   };
 
+  const clearMeta = (targetData) => {
+    if (!targetDir) return;
+    setOpenTrashModal(false);
+    setShowDevConsole(true);
+    window.electron.ipcRenderer.clearMeta(targetDir, targetData);
+  };
+
   const excuteCommand = () => {
     if (!commandInput) return;
     setLatestCommandInput(commandInput);
@@ -633,10 +642,33 @@ const AppContent = () => {
             <img src={folderIcon} alt="folder" width={24} />
             Open Extraction Directory
           </WfButton>
-          <WfButton onClick={changeTargetDir}>
-            <img src={settingsIcon} alt="settings" width={24} />
-            {targetDir ? 'Change' : 'Set'} Extraction Directory
-          </WfButton>
+          <LayoutFlex style={{ marginTop: 16 }}>
+            <WfButton style={{ flexGrow: 1 }} onClick={changeTargetDir}>
+              <img src={settingsIcon} alt="settings" width={24} />
+              {targetDir ? 'Change' : 'Set'} Extraction Directory
+            </WfButton>
+            <WfButton
+              style={{
+                flexGrow: 0,
+                flexShrink: 0,
+                width: 64,
+                marginLeft: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+              }}
+              disabled={!targetDir}
+              onClick={() => setOpenTrashModal(true)}
+            >
+              <img
+                style={{ margin: 0 }}
+                src={trashIcon}
+                alt="trash"
+                width={24}
+              />
+            </WfButton>
+          </LayoutFlex>
           <div>
             <Typography style={{ width: '100%', marginTop: 16 }}>
               {targetDir?.replace(/\\/g, '/') || 'N/A'}
@@ -998,6 +1030,18 @@ const AppContent = () => {
         <ModalActions data-dir={extractionError?.actionDir}>
           {extractionError?.actions}
         </ModalActions>
+      </Modal>
+      <Modal open={openTrashModal} onClose={() => setOpenTrashModal(false)}>
+        <WfButton
+          style={{
+            fontSize: '1rem',
+            paddingRight: 16,
+          }}
+          onClick={() => clearMeta('characterSprites')}
+        >
+          <img src={trashIcon} alt="trash" width={24} />
+          Reset character sprites cache
+        </WfButton>
       </Modal>
     </div>
   );

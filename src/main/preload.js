@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('electron', {
     openDevTools() {
       ipcRenderer.send('openDevTools');
     },
+    clearMeta(rootDir, targetData) {
+      ipcRenderer.send('clearMeta', rootDir, targetData);
+    },
     getAppVersion() {
       ipcRenderer.send('getAppVersion');
     },

@@ -208,7 +208,9 @@ class WfExtractor {
     };
 
     this.setRootPath(rootDir || DEFAULT_ROOT_PATH);
-    logger.log(`Target region set as ${region}`);
+    if (region) {
+      logger.log(`Target region set as ${region}`);
+    }
     this.region = region || 'jp';
   }
 
