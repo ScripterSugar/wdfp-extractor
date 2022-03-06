@@ -1933,13 +1933,25 @@ class WfExtractor {
 
         let scale = 1;
         let eliyaBot = false;
+        let animate = false;
+        let timelineRoot = '';
+        let noTimeline = false;
 
         args.forEach((arg, idx) => {
-          if (/scale/.test(arg)) {
+          if (/^-scale$/.test(arg)) {
             scale = parseFloat(args[idx + 1] || 1);
           }
-          if (/eliyabot/.test(arg)) {
+          if (/^-timeline$/.test(arg)) {
+            timelineRoot = args[idx + 1];
+          }
+          if (/^-eliyabot$/.test(arg)) {
             eliyaBot = true;
+          }
+          if (/^-noTimeline$/.test(arg)) {
+            noTimeline = true;
+          }
+          if (/^-animate$/.test(arg)) {
+            animate = true;
           }
         });
 
@@ -1971,22 +1983,42 @@ class WfExtractor {
 
         const sheetName = destPath.split('/').pop();
 
-        await this.processSpritesByAtlases(
-          `${this.ROOT_PATH}/output/assets/${destPath
-            .split('/')
-            .slice(0, -1)
-            .join('/')}`,
-          {
-            extractAll: true,
-            scale,
-            sheetName,
-            cropProps: {
-              eliyaBot,
-            },
-          }
-        );
+        if (noTimeline) {
+          const sprite = await asyncReadFile(
+            `${this.ROOT_PATH}/output/assets/${destPath}.png`
+          );
+          const atlases = JSON.parse(
+            (
+              await asyncReadFile(
+                `${this.ROOT_PATH}/output/assets/${destPath}.atlas.json`
+              )
+            ).toString()
+          );
+          await this.fileReader.cropSpritesFromAtlas({
+            sprite,
+            atlases,
+            destPath: `${this.ROOT_PATH}/output/assets/${destPath}`,
+            generateGif: `${this.ROOT_PATH}/output/assets/${destPath}/${sheetName}.gif`,
+          });
+        } else {
+          await this.processSpritesByAtlases(
+            `${this.ROOT_PATH}/output/assets/${destPath
+              .split('/')
+              .slice(0, -1)
+              .join('/')}`,
+            {
+              extractAll: true,
+              scale,
+              sheetName,
+              animate,
+              timelineRoot,
+              cropProps: {
+                eliyaBot,
+              },
+            }
+          );
+        }
 
-        return null;
         return null;
       }
       case /^(search) .*/.test(debug): {
@@ -2058,42 +2090,9 @@ class WfExtractor {
         }
       }
       default: {
-        console.log('');
+        return logger.log(`Command not found: ${debug.split(' ')[0]}`);
       }
     }
-
-    const found = await this.digestAndCheckFilePath(debug);
-
-    logger.log(JSON.stringify(found || {}));
-
-    // return this.extractGachaOdds();
-
-    // return this.extractSkillEffects();
-
-    if (found) {
-      try {
-        if (/orderedmap/.test(debug)) {
-          await this.fileReader.readMasterTableAndGenerateOutput(
-            found[1],
-            found[0]
-          );
-        } else {
-          await this.fileReader.readGeneralAndCreateOutput(found[1], found[0]);
-        }
-      } catch (err) {
-        console.log(err);
-      }
-    }
-
-    // await this.processSpritesByAtlases(`${this.ROOT_PATH}/output/assets/item`, {
-    //   extractAll: true,
-    // });
-    // await this.processSpritesByAtlases(
-    //   `${this.ROOT_PATH}/output/assets/character/alice/pixelart`,
-    //   {
-    //     extractAll: true,
-    //   }
-    // );
 
     return true;
   };

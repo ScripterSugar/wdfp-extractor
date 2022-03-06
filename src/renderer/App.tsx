@@ -23,6 +23,7 @@ import { getIpcReturn } from './helpers';
 import Typography, { IndicatorTypo } from './components/Typography';
 import Modal from './components/Modal';
 import Switch from './components/Switch';
+import TextField from './components/TextField';
 
 const AppMainLayout = styled.div`
   display: flex;
@@ -108,6 +109,7 @@ const DevConsoleInner = styled.div`
   flex-direction: column;
   padding: 8px;
   overflow-x: hidden;
+  position: relative;
 
   > p {
     margin: 0;
@@ -175,6 +177,15 @@ const ProgressBar = styled.div`
   background: #f2a242;
 `;
 
+const CommandWrapper = styled.div`
+  margin: auto;
+  height: 24px;
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+`;
+
 const Progress = ({
   progress,
 }: {
@@ -205,7 +216,14 @@ const Progress = ({
 
 const AppContent = () => {
   const [targetDir, setTargetDir] = usePermanentState(null, 'TARGET_DIR');
-  const [showDevConsole, setShowDevConsole] = useState(false);
+  const [showDevConsole, setShowDevConsole] = useState(
+    process.env.NODE_ENV === 'development'
+  );
+  const [latestCommandInput, setLatestCommandInput] = usePermanentState(
+    '',
+    'LATEST_COMMAND_INPUT'
+  );
+  const [commandInput, setCommandInput] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionError, setExtractionError] = useState(null);
   const [appVersion, setAppVersion] = useState('UNKNOWN');
@@ -478,7 +496,7 @@ const AppContent = () => {
     }
   };
 
-  const startExtraction = async () => {
+  const startExtraction = async (command) => {
     setIsExtracting(true);
     setDevConsoleLogs([]);
     setOpenSelectOption(false);
@@ -496,10 +514,17 @@ const AppContent = () => {
         ],
       });
     }
-    window.electron.ipcRenderer.startExtraction(targetDir, {
-      ...options,
-      debug: options.isDebug && options.debug,
-    });
+    if (command) {
+      window.electron.ipcRenderer.startExtraction(targetDir, {
+        ...options,
+        debug: command,
+      });
+    } else {
+      window.electron.ipcRenderer.startExtraction(targetDir, {
+        ...options,
+        debug: options.isDebug && options.debug,
+      });
+    }
 
     let ipcResponse;
 
@@ -554,6 +579,18 @@ const AppContent = () => {
 
   const restartAndUpdate = () => {
     window.electron.ipcRenderer.updateApp();
+  };
+
+  const loadLatestCommand = () => {
+    setCommandInput(latestCommandInput);
+  };
+
+  const excuteCommand = () => {
+    if (!commandInput) return;
+    setLatestCommandInput(commandInput);
+    setCommandInput('');
+
+    setTimeout(() => startExtraction(commandInput), 1);
   };
 
   return (
@@ -648,6 +685,16 @@ const AppContent = () => {
               {progresses.map((progress) => (
                 <Progress key={progress.id} progress={progress} />
               ))}
+              <CommandWrapper>
+                <TextField
+                  value={commandInput}
+                  disabled={isExtracting}
+                  onChange={(event) => setCommandInput(event.target.value)}
+                  onEnter={excuteCommand}
+                  onArrowUp={loadLatestCommand}
+                  onArrowDown={() => setCommandInput('')}
+                />
+              </CommandWrapper>
             </DevConsoleInner>
           </WfCard>
         )}
@@ -925,7 +972,7 @@ const AppContent = () => {
           >
             Abort
           </WfDangerButton>
-          <WfButton style={{ width: 160 }} onClick={startExtraction}>
+          <WfButton style={{ width: 160 }} onClick={() => startExtraction()}>
             Extract
           </WfButton>
         </ModalActions>
