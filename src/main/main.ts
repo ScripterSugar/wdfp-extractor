@@ -101,7 +101,17 @@ ipcMain.on(
     });
 
     if (debug) {
-      await wfExtractor.development(debug);
+      const start = new Date().getTime();
+      try {
+        logger.log(`Excuting command ${debug}`);
+        await wfExtractor.development(debug);
+      } catch (err) {
+        console.log(err);
+        logger.log(`Error excuting command ${debug}`);
+        logger.log(err?.message || `${err}`);
+      }
+      const end = new Date().getTime();
+      logger.log(`Process done in ${((end - start) / 1000).toFixed(2)}s`);
 
       event.reply('extractionResponseMain', { success: true });
       return;

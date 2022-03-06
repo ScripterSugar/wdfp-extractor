@@ -198,7 +198,11 @@ export default class WfFileReader {
     };
   };
 
-  createGifFromFrames = async (targetFrames, destPath, { delay } = {}) => {
+  createGifFromFrames = async (
+    targetFrames,
+    destPath,
+    { delay: defaultDelay = 75 } = {}
+  ) => {
     try {
       let minX = Infinity;
       let maxX = 0;
@@ -221,10 +225,9 @@ export default class WfFileReader {
       });
       const refinedWidth = maxX - minX;
       const refinedHeight = maxY - minY;
-
       const refinedFrames = await Promise.all(
-        targetFrames.map(async (image) => {
-          const { frame, fx = 0, fy = 0, w = 0, h = 0 } = image;
+        targetFrames.map(async (image, idx) => {
+          const { frame, fx = 0, fy = 0, w = 0, h = 0, frameId } = image;
           const animationFrame = await sharp({
             create: {
               channels: 4,
@@ -246,22 +249,41 @@ export default class WfFileReader {
             })
             .toBuffer();
 
-          return resized;
+          let frameDelay = defaultDelay;
+          let frameIndex = frameId?.replace(/[^0-9]/g, '') || '';
+
+          if (frameIndex.length > 3) {
+            frameIndex = parseFloat(frameIndex);
+            const beforeFrameIndex =
+              parseFloat(
+                targetFrames[idx - 1]?.frameId?.replace(/[^0-9]/g, '')
+              ) || 0;
+
+            const frameAmount = frameIndex - beforeFrameIndex;
+
+            frameDelay = Math.round(1000 * (frameAmount / 60));
+          }
+
+          return {
+            frame: resized,
+            delay: frameDelay,
+          };
         })
       );
       const encoder = new GifEncoder(refinedWidth * 2, refinedHeight * 2);
       encoder.pipe(fs.createWriteStream(destPath));
       encoder.setRepeat(0);
       encoder.setQuality(1);
-      encoder.setDelay(delay || 75);
       encoder.setTransparent('0xF5F5F5');
       encoder.writeHeader();
 
       for (const image of refinedFrames) {
         if (!image) continue;
+        const { frame, delay } = image;
+        encoder.setDelay(delay);
         const imagePixels = await new Promise((resolve) =>
           getPixels(
-            `data:image/png;base64,${image.toString('base64')}`,
+            `data:image/png;base64,${frame.toString('base64')}`,
             (err, pixels) => {
               resolve(pixels);
             }
