@@ -60,6 +60,9 @@ Once the extraction is done, you can find inflated asset files located in the ou
 - Support extraction of ability texts
 - Data viewer
 
+## Known issues
+- Whitespaces in Windows user name / extraction directory path causing crashes on extraction process. (Due date: TBD)
+
 ## Contributing
 
 I won't actively troubleshoot the bugs as far as it works for me, so if you're having trouble using the tool on your side, in most cases you'll have to fix the problem yourself, or at least provide me all the details about your environments, runtime context, ETC. Please include all the details when you open issue here. Also feel free to open any PR.
