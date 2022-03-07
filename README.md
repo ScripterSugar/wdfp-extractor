@@ -28,9 +28,11 @@ To use this tool, your device should at least have file-listing access to the /d
 
 ### Emulator
 - Nox player (version 7.0.x) - **Recommended (Global)**
+- Bluestacks 5 (Not recommended - bad performance due to unabled adbd root access.)
 
 ### Real device
-- Pixel 2 (Android 11), Pixel 4 XL (Android 12)
+- Pixel 2 (Android 11)
+- Pixel 4 XL (Android 12)
 
 ## Usage
 ![wdfp](https://user-images.githubusercontent.com/19164553/149924519-91e016e3-5ac7-4d97-a8f3-c7c833f79e76.gif)
@@ -57,6 +59,9 @@ Once the extraction is done, you can find inflated asset files located in the ou
 ## Planned feature
 - Support extraction of ability texts
 - Data viewer
+
+## Known issues
+- Whitespaces in Windows user name / extraction directory path causing crashes on extraction process. (Due date: TBD)
 
 ## Contributing
 
