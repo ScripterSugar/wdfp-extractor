@@ -28,6 +28,7 @@ To use this tool, your device should at least have file-listing access to the /d
 
 ### Emulator
 - Nox player (version 7.0.x) - **Recommended (Global)**
+- Bluestacks 5 (Not recommended - bad performance due to unabled adbd root access.)
 
 ### Real device
 - Pixel 2 (Android 11), Pixel 4 XL (Android 12)
