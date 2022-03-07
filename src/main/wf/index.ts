@@ -1055,6 +1055,57 @@ class WfExtractor {
     }
   };
 
+  animateCharacterSprite = async (character, { ignoreCache }) => {
+    if (
+      !this.metadata.spriteProcessedLock?.includes(character) ||
+      ignoreCache
+    ) {
+      await this.processSpritesByAtlases(
+        `${this.ROOT_PATH}/output/assets/character/${character}/pixelart`,
+        { animate: true, extractAll: this.options.extractAllFrames }
+      );
+      await this.markMetaData({
+        spriteProcessedLock: [
+          ...(this.metadata.spriteProcessedLock || []),
+          character,
+        ],
+      });
+    }
+
+    if (
+      !this.metadata.specialSpriteProcessedLock?.includes(character) ||
+      ignoreCache
+    ) {
+      await asyncMkdir(
+        `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated`,
+        { recursive: true }
+      );
+
+      const specialImage = await asyncReadFile(
+        `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet.png`
+      );
+      const specialAtlases = JSON.parse(
+        (
+          await asyncReadFile(
+            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet.atlas.json`
+          )
+        ).toString()
+      );
+      await this.fileReader.cropSpritesFromAtlas({
+        sprite: specialImage,
+        atlases: specialAtlases,
+        destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet`,
+        generateGif: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated/special.gif`,
+      });
+      await this.markMetaData({
+        specialSpriteProcessedLock: [
+          ...(this.metadata.specialSpriteProcessedLock || []),
+          character,
+        ],
+      });
+    }
+  };
+
   generateAnimatedSprites = async () => {
     logger.log('Cropping character sprites & generating animated GIFs...');
     const characters = await this.getCharacterList();
@@ -1066,52 +1117,9 @@ class WfExtractor {
 
     for (const character of characters) {
       try {
-        if (!this.metadata.spriteProcessedLock?.includes(character)) {
-          await this.processSpritesByAtlases(
-            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart`,
-            { animate: true, extractAll: this.options.extractAllFrames }
-          );
-          await this.markMetaData({
-            spriteProcessedLock: [
-              ...(this.metadata.spriteProcessedLock || []),
-              character,
-            ],
-          });
-        }
-
-        if (!this.metadata.specialSpriteProcessedLock?.includes(character)) {
-          await asyncMkdir(
-            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated`,
-            { recursive: true }
-          );
-
-          const specialImage = await asyncReadFile(
-            `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet.png`
-          );
-          const specialAtlases = JSON.parse(
-            (
-              await asyncReadFile(
-                `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet.atlas.json`
-              )
-            ).toString()
-          );
-          await this.fileReader.cropSpritesFromAtlas({
-            sprite: specialImage,
-            atlases: specialAtlases,
-            destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet`,
-            generateGif: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated/special.gif`,
-          });
-          await this.markMetaData({
-            specialSpriteProcessedLock: [
-              ...(this.metadata.specialSpriteProcessedLock || []),
-              character,
-            ],
-          });
-        }
+        await this.animateCharacterSprite(character);
       } catch (err) {
-        if (character === 'emilia') {
-          console.log(err);
-        }
+        console.log(err);
         continue;
       } finally {
         tracker.progress();
@@ -1927,6 +1935,31 @@ class WfExtractor {
       case /exboost/.test(debug): {
         await this.extractEXBoostMasterTable();
         return this.constructReadableExBoostOddsTable();
+      }
+      case /^(animate) .*/.test(debug): {
+        const args = debug.split(' ').slice(1);
+
+        let character;
+
+        args.forEach((arg, idx) => {
+          if (/^-character$/.test(arg)) {
+            character = args[idx + 1];
+          }
+        });
+
+        if (!character) {
+          return logger.log(
+            'Invalid parameter. Available args: -character [characterName]'
+          );
+        }
+
+        const characters = await this.getCharacterList();
+
+        if (!characters.includes(character)) {
+          return logger.log(`Character ${character} not found.`);
+        }
+
+        return this.animateCharacterSprite(character, { ignoreCache: true });
       }
       case /^(sprite) .*/.test(debug): {
         const args = debug.split(' ').slice(1);

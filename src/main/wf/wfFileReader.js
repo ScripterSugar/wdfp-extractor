@@ -201,7 +201,7 @@ export default class WfFileReader {
   createGifFromFrames = async (
     targetFrames,
     destPath,
-    { delay: defaultDelay = 75 } = {}
+    { delay: defaultDelay = 75, begin = 0 } = {}
   ) => {
     try {
       let minX = Infinity;
@@ -257,7 +257,7 @@ export default class WfFileReader {
             const beforeFrameIndex =
               parseFloat(
                 targetFrames[idx - 1]?.frameId?.replace(/[^0-9]/g, '')
-              ) || 0;
+              ) || begin;
 
             const frameAmount = frameIndex - beforeFrameIndex;
 
@@ -333,6 +333,7 @@ export default class WfFileReader {
 
     this.createGifFromFrames(targetFrames, `${destPath}/${name}.gif`, {
       delay,
+      begin,
     });
   };
 
