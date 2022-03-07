@@ -1055,7 +1055,7 @@ class WfExtractor {
     }
   };
 
-  animateCharacterSprite = async (character, { ignoreCache }) => {
+  animateCharacterSprite = async (character, { ignoreCache = false } = {}) => {
     if (
       !this.metadata.spriteProcessedLock?.includes(character) ||
       ignoreCache
