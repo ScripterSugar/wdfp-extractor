@@ -31,7 +31,8 @@ To use this tool, your device should at least have file-listing access to the /d
 - Bluestacks 5 (Not recommended - bad performance due to unabled adbd root access.)
 
 ### Real device
-- Pixel 2 (Android 11), Pixel 4 XL (Android 12)
+- Pixel 2 (Android 11)
+- Pixel 4 XL (Android 12)
 
 ## Usage
 ![wdfp](https://user-images.githubusercontent.com/19164553/149924519-91e016e3-5ac7-4d97-a8f3-c7c833f79e76.gif)
