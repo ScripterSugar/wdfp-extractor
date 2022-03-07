@@ -708,6 +708,8 @@ const AppContent = () => {
               padding: 8,
               flexShrink: 1,
               width: 0,
+              position: 'relative',
+              paddingBottom: 40,
             }}
           >
             <DevConsoleInner ref={devLogRef}>
@@ -717,17 +719,17 @@ const AppContent = () => {
               {progresses.map((progress) => (
                 <Progress key={progress.id} progress={progress} />
               ))}
-              <CommandWrapper>
-                <TextField
-                  value={commandInput}
-                  disabled={isExtracting}
-                  onChange={(event) => setCommandInput(event.target.value)}
-                  onEnter={excuteCommand}
-                  onArrowUp={loadLatestCommand}
-                  onArrowDown={() => setCommandInput('')}
-                />
-              </CommandWrapper>
             </DevConsoleInner>
+            <CommandWrapper>
+              <TextField
+                value={commandInput}
+                disabled={isExtracting}
+                onChange={(event) => setCommandInput(event.target.value)}
+                onEnter={excuteCommand}
+                onArrowUp={loadLatestCommand}
+                onArrowDown={() => setCommandInput('')}
+              />
+            </CommandWrapper>
           </WfCard>
         )}
       </AppMainLayout>

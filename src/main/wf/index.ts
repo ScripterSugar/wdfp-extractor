@@ -375,13 +375,7 @@ class WfExtractor {
       .filter((val) => val)
       .pop();
 
-    logger.log(`Copying files from ${source} to pullable destination...`);
-
     await this.adbShell.exec(`cp -a "${source}" "/sdcard/wdfpExtract"`);
-
-    logger.log(`Successfully copied files from ${source} to sdcard.`);
-    logger.log(`Pulling copied files from sdcard to extraction directory...`);
-
     return asyncExec(
       `${ADB_PATH} -s ${this.DEVICE_ID} pull "/sdcard/wdfpExtract/${sourceTargetName}" "${target}"`
     );
@@ -398,9 +392,13 @@ class WfExtractor {
         (file) => file.modifiedDate > lastExtractionDate && !file.isDirectory
       );
 
-      logger.log('Extracting deltas...');
+      const deltaProgress = logger.progressStart({
+        id: 'Extracting deltas...',
+        max: deltaFiles.length,
+      });
 
       for (const deltaFile of deltaFiles) {
+        deltaProgress.progress();
         const targetPath = `${this.ROOT_PATH}/dump/${deltaFile.path
           .replace(this.adbWfPath, '')
           .split('/')
@@ -413,6 +411,7 @@ class WfExtractor {
 
         await this.adbPull(deltaFile.path, `${targetPath}/`);
       }
+      deltaProgress.end();
 
       this.deltaFiles = deltaFiles;
 
@@ -428,6 +427,7 @@ class WfExtractor {
       isChanged = true;
       await new Promise((resolve) => rimraf(`${this.ROOT_PATH}/dump`, resolve));
       console.log('Existing dump data cleared.');
+      console.log('Copying asset files to /dump...');
       await this.adbPull(this.adbWfPath, `${this.ROOT_PATH}/dump`);
     }
 
