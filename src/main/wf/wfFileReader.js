@@ -460,8 +460,9 @@ export default class WfFileReader {
         let isDuplicated;
         let cacheResolver;
         let destPath = _destPath;
-        if (xyCache[`${x}${y}`]) {
-          imageBuffer = await xyCache[`${x}${y}`];
+
+        if (xyCache[`${x}|${y}`]) {
+          imageBuffer = await xyCache[`${x}|${y}`];
           isDuplicated = true;
           if (r) {
             args.w = h;
@@ -470,7 +471,7 @@ export default class WfFileReader {
             args.y = x;
           }
         } else {
-          xyCache[`${x}${y}`] = new Promise((resolve) => {
+          xyCache[`${x}|${y}`] = new Promise((resolve) => {
             cacheResolver = resolve;
           });
           if (r) {
