@@ -640,6 +640,33 @@ export default class WfFileReader {
     openedFile[2] = 78;
     openedFile[3] = 71;
 
+    if (/full_shot_1440_1920/.test(savePath)) {
+      const resized = await sharp(openedFile)
+        .resize({
+          width: 500,
+          height: 500,
+          fit: 'inside',
+        })
+        .toBuffer();
+
+      const resizedFile = await sharp({
+        create: {
+          width: 500,
+          height: 500,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        },
+      })
+        .composite([{ input: resized, gravity: 'center' }])
+        .png()
+        .toBuffer();
+
+      await writeFileRecursive(
+        `${rootDir}/output/assets/resized_${savePath}`,
+        resizedFile
+      );
+    }
+
     return writeFileRecursive(
       `${rootDir}/output/assets/${savePath}`,
       openedFile
