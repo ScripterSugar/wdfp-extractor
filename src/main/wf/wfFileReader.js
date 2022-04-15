@@ -662,7 +662,7 @@ export default class WfFileReader {
         .toBuffer();
 
       await writeFileRecursive(
-        `${rootDir}/output/assets/resized_${savePath}`,
+        `${rootDir}/output/assets/${savePath.replace('.png', '_resized.png')}`,
         resizedFile
       );
     }
