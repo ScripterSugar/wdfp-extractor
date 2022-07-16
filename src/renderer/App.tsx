@@ -231,6 +231,7 @@ const AppContent = () => {
   const [appVersion, setAppVersion] = useState('UNKNOWN');
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  const [meta, setMeta] = useState({});
   const handleDataLogRef = useRef();
   const [devConsoleLogs, setDevConsoleLogs, devConsoleLogsRef] = useStateRef(
     []
@@ -279,13 +280,58 @@ const AppContent = () => {
     },
     JSON.stringify
   );
+
+  const [pullOptions, setPullOptions] = usePermanentState(
+    {
+      skipSwfDecompile: false,
+      variant: 'device',
+      customPort: '',
+      parseActionScript: true,
+      regionVariant: 'en',
+      region: 'gl',
+      baseVersion: '',
+      customCdn: '',
+      ignoreFull: false,
+    },
+    'PULL_OPTION',
+    (val) => {
+      try {
+        return JSON.parse(val);
+      } catch (err) {
+        return {
+          skipSwfDecompile: false,
+          customPort: '',
+          variant: 'device',
+          regionVariant: 'en',
+          region: 'gl',
+          baseVersion: '',
+          customCdn: '',
+          ignoreFull: false,
+        };
+      }
+    },
+    JSON.stringify
+  );
   const [openInfoModal, setOpenInfoModal] = useState(false);
   const [openSelectOption, setOpenSelectOption] = useState(false);
+  const [openSelectPullOption, setOpenSelectPullOption] = useState(false);
   const devLogRef = useRef();
   const [progresses, setProgresses] = useState([]);
 
   const onChangeOptions = (key, value) =>
     setOptions({ ...options, [key]: value });
+
+  const onChangePullOptions = (key, value) => {
+    return setPullOptions({
+      ...pullOptions,
+      ...((key === 'regionVariant' &&
+        ['kr', 'en'].includes(value) && { region: 'gl' }) || { region: 'jp' }),
+      ...(key === 'regionVariant' && {
+        baseVersion: meta?.[`${value}LatestApiAssetVersion`] || '',
+      }),
+      [key]: value,
+    });
+  };
 
   const handleDataLog = useCallback(
     ({ type, data: { id, ...rest } }) => {
@@ -341,176 +387,231 @@ const AppContent = () => {
     }
   };
 
-  const responseExtraction = (res) => {
+  const responseExtraction = useCallback((res) => {
     window.electron.ipcRenderer.responseExtraction(res);
     setExtractionError(null);
-  };
+  }, []);
 
-  const handleExtractionError = (errorString) => {
-    const [error, ...args] = errorString.split('/');
+  const handleExtractionError = useCallback(
+    (errorString) => {
+      const [error, ...args] = errorString.split('/');
 
-    switch (error) {
-      case 'JAVA_NOT_INSTALLED': {
-        return setExtractionError({
-          error:
-            'To run this program, you need the java installed in your machine.\nPlease refer to the Installation guide of github page.',
-          ref: 'https://www.java.com/en/download/',
-          actions: [
-            <WfDangerButton onClick={() => responseExtraction('done')}>
-              Abort
-            </WfDangerButton>,
-          ],
-        });
-      }
-      case 'MULTIPLE_DEVICES_FOUND': {
-        return setExtractionError({
-          error:
-            'Multiple instances are connected to ADB. Please select the device you want to extract assets from.',
-          title: 'Please select the device',
-          actionDir: 'vertical',
-          actions: args.map((deviceName) => (
-            <WfButton
-              key={deviceName}
-              onClick={() => responseExtraction(`selectDevice${deviceName}`)}
-            >
-              {deviceName}
-            </WfButton>
-          )),
-        });
-      }
-      case 'APK_NOT_FOUND': {
-        return setExtractionError({
-          error:
-            'Failed to detect World Flipper installed on the designated device.\nPlease make sure you have World Flipper installed on your phone/emu, and downloaded all the assets.',
-          actions: [
-            <WfDangerButton onClick={() => responseExtraction('done')}>
-              Abort
-            </WfDangerButton>,
-            <WfButton onClick={() => responseExtraction('retry')}>
-              Retry
-            </WfButton>,
-          ],
-        });
-      }
-      case 'DEVICE_NOT_FOUND': {
-        return setExtractionError({
-          error:
-            'No connected devices found from adb.\nMake sure you have your emulator running or the device being connected.',
-          ref: 'https://github.com/ScripterSugar/wdfp-extractor',
-          actions: [
-            <WfDangerButton onClick={() => responseExtraction('done')}>
-              Abort
-            </WfDangerButton>,
-            <WfButton onClick={() => responseExtraction('retry')}>
-              Retry
-            </WfButton>,
-          ],
-        });
-      }
-      case 'FAILED_TO_LOAD_PATHS': {
-        return setExtractionError({
-          error:
-            'Master tables are not extracted.\nPlease turn on the option "Extract master table" if this is your first extraction.',
-          actions: [
-            <WfDangerButton onClick={() => responseExtraction('done')}>
-              Abort
-            </WfDangerButton>,
-            <WfButton
-              onClick={() => responseExtraction('extractMaster|phase:5')}
-            >
-              Retry with option
-            </WfButton>,
-          ],
-        });
-      }
-      case 'PROHIBITED_DATA_PERMISSION': {
-        return setExtractionError({
-          error:
-            'Connected device does not have file listing access to the /data root directory.\nYour device must be rooted to extract assets.',
-          ref: 'https://github.com/ScripterSugar/wdfp-extractor',
-          actions: [
-            <WfDangerButton onClick={() => responseExtraction('done')}>
-              Abort
-            </WfDangerButton>,
-          ],
-        });
-      }
-      case 'INVALID_BOOT_FFC6': {
-        return setExtractionError({
-          error: `boot_ffc6 script file seems like in invalid format.\nThis error might caused by misoperation of your FFDEC skipping the extraction due to timeout setting.\nIf the problem persists, try put the scripts file under swf/scripts directly using FFDEC standalone.\nboot_ffc6.as file must be present at the path ${targetDir}/swf/scripts/boot_ffc6.as\n\nOr you can retry swf extraction, purging current decompiled swf files.`,
-          ref: 'https://github.com/jindrapetrik/jpexs-decompiler',
-          actions: [
-            <WfDangerButton onClick={() => responseExtraction('done')}>
-              Abort
-            </WfDangerButton>,
-            <WfButton onClick={() => responseExtraction('purgeSwf')}>
-              Purge SWF
-            </WfButton>,
-            <WfButton onClick={() => responseExtraction('retry')}>
-              Retry
-            </WfButton>,
-          ],
-        });
-      }
-      case 'FAILED_TO_EXTRACT_BOOT_FFC6': {
-        return setExtractionError({
-          error: `Essential AS scripts were not extracted due to performance issue or misoperation of FFDEC.\nIf the problem persists, try put the scripts file under swf/scripts directly using FFDEC standalone.\nboot_ffc6.as file must be present at the path ${targetDir}/swf/scripts/boot_ffc6.as\n\nOr you can retry swf extraction, purging current decompiled swf files.`,
-          ref: 'https://github.com/jindrapetrik/jpexs-decompiler',
-          actions: [
-            <WfDangerButton onClick={() => responseExtraction('done')}>
-              Abort
-            </WfDangerButton>,
-            <WfButton onClick={() => responseExtraction('purgeSwf')}>
-              Purge SWF
-            </WfButton>,
-            <WfButton onClick={() => responseExtraction('retry')}>
-              Retry
-            </WfButton>,
-          ],
-        });
-      }
-      default: {
-        let errorMsg;
-
-        console.log(error);
-        try {
-          errorMsg =
-            (typeof error === 'string' && error) ||
-            error?.message ||
-            JSON.stringify(error);
-        } catch (err) {
-          errorMsg = 'UNKNOWN';
+      switch (error) {
+        case 'JAVA_NOT_INSTALLED': {
+          return setExtractionError({
+            error:
+              'To run this program, you need the java installed in your machine.\nPlease refer to the Installation guide of github page.',
+            ref: 'https://www.java.com/en/download/',
+            actions: [
+              <WfDangerButton onClick={() => responseExtraction('done')}>
+                Abort
+              </WfDangerButton>,
+            ],
+          });
         }
-
-        if (typeof errorMsg !== 'string') {
-          errorMsg = 'UNKNOWN';
+        case 'MULTIPLE_DEVICES_FOUND': {
+          return setExtractionError({
+            error:
+              'Multiple instances are connected to ADB. Please select the device you want to extract assets from.',
+            title: 'Please select the device',
+            actionDir: 'vertical',
+            actions: args.map((deviceName) => (
+              <WfButton
+                key={deviceName}
+                onClick={() => responseExtraction(`selectDevice${deviceName}`)}
+              >
+                {deviceName}
+              </WfButton>
+            )),
+          });
         }
-        setExtractionError({
-          error: errorMsg,
+        case 'APK_NOT_FOUND': {
+          return setExtractionError({
+            error:
+              'Failed to detect World Flipper installed on the designated device.\nPlease make sure you have World Flipper installed on your phone/emu, and downloaded all the assets.',
+            actions: [
+              <WfDangerButton onClick={() => responseExtraction('done')}>
+                Abort
+              </WfDangerButton>,
+              <WfButton onClick={() => responseExtraction('retry')}>
+                Retry
+              </WfButton>,
+            ],
+          });
+        }
+        case 'DEVICE_NOT_FOUND': {
+          return setExtractionError({
+            error:
+              'No connected devices found from adb.\nMake sure you have your emulator running or the device being connected.',
+            ref: 'https://github.com/ScripterSugar/wdfp-extractor',
+            actions: [
+              <WfDangerButton onClick={() => responseExtraction('done')}>
+                Abort
+              </WfDangerButton>,
+              <WfButton onClick={() => responseExtraction('retry')}>
+                Retry
+              </WfButton>,
+            ],
+          });
+        }
+        case 'FAILED_TO_LOAD_PATHS': {
+          return setExtractionError({
+            error:
+              'Master tables are not extracted.\nPlease turn on the option "Extract master table" if this is your first extraction.',
+            actions: [
+              <WfDangerButton onClick={() => responseExtraction('done')}>
+                Abort
+              </WfDangerButton>,
+              <WfButton
+                onClick={() => responseExtraction('extractMaster|phase:5')}
+              >
+                Retry with option
+              </WfButton>,
+            ],
+          });
+        }
+        case 'PROHIBITED_DATA_PERMISSION': {
+          return setExtractionError({
+            error:
+              'Connected device does not have file listing access to the /data root directory.\nYour device must be rooted to extract assets.',
+            ref: 'https://github.com/ScripterSugar/wdfp-extractor',
+            actions: [
+              <WfDangerButton onClick={() => responseExtraction('done')}>
+                Abort
+              </WfDangerButton>,
+            ],
+          });
+        }
+        case 'INVALID_BOOT_FFC6': {
+          return setExtractionError({
+            error: `boot_ffc6 script file seems like in invalid format.\nThis error might caused by misoperation of your FFDEC skipping the extraction due to timeout setting.\nIf the problem persists, try put the scripts file under swf/scripts directly using FFDEC standalone.\nboot_ffc6.as file must be present at the path ${targetDir}/swf/scripts/boot_ffc6.as\n\nOr you can retry swf extraction, purging current decompiled swf files.`,
+            ref: 'https://github.com/jindrapetrik/jpexs-decompiler',
+            actions: [
+              <WfDangerButton onClick={() => responseExtraction('done')}>
+                Abort
+              </WfDangerButton>,
+              <WfButton onClick={() => responseExtraction('purgeSwf')}>
+                Purge SWF
+              </WfButton>,
+              <WfButton onClick={() => responseExtraction('retry')}>
+                Retry
+              </WfButton>,
+            ],
+          });
+        }
+        case 'FAILED_TO_EXTRACT_BOOT_FFC6': {
+          return setExtractionError({
+            error: `Essential AS scripts were not extracted due to performance issue or misoperation of FFDEC.\nIf the problem persists, try put the scripts file under swf/scripts directly using FFDEC standalone.\nboot_ffc6.as file must be present at the path ${targetDir}/swf/scripts/boot_ffc6.as\n\nOr you can retry swf extraction, purging current decompiled swf files.`,
+            ref: 'https://github.com/jindrapetrik/jpexs-decompiler',
+            actions: [
+              <WfDangerButton onClick={() => responseExtraction('done')}>
+                Abort
+              </WfDangerButton>,
+              <WfButton onClick={() => responseExtraction('purgeSwf')}>
+                Purge SWF
+              </WfButton>,
+              <WfButton onClick={() => responseExtraction('retry')}>
+                Retry
+              </WfButton>,
+            ],
+          });
+        }
+        default: {
+          let errorMsg;
+
+          console.log(error);
+          try {
+            errorMsg =
+              (typeof error === 'string' && error) ||
+              error?.message ||
+              JSON.stringify(error);
+          } catch (err) {
+            errorMsg = 'UNKNOWN';
+          }
+
+          if (typeof errorMsg !== 'string') {
+            errorMsg = 'UNKNOWN';
+          }
+          setExtractionError({
+            error: errorMsg,
+            actions: [
+              <WfDangerButton onClick={() => responseExtraction('done')}>
+                Abort
+              </WfDangerButton>,
+              <WfButton onClick={() => responseExtraction('retry')}>
+                Retry
+              </WfButton>,
+            ],
+          });
+        }
+      }
+    },
+    [responseExtraction, setExtractionError, targetDir]
+  );
+
+  const startExtraction = useCallback(
+    async (command) => {
+      setIsExtracting(true);
+      setDevConsoleLogs([]);
+      setOpenSelectOption(false);
+      setShowDevConsole(true);
+
+      if (/[^A-z/\\ -:]/.test(targetDir)) {
+        setIsExtracting(false);
+        return setExtractionError({
+          error:
+            'Invalid characters in target directory.\nExtraction path must only include english and dashes.\nTry to create directory at the root of your drive, somewhere like C:/wafuriextract',
           actions: [
             <WfDangerButton onClick={() => responseExtraction('done')}>
               Abort
             </WfDangerButton>,
-            <WfButton onClick={() => responseExtraction('retry')}>
-              Retry
-            </WfButton>,
           ],
         });
       }
-    }
-  };
+      if (command) {
+        window.electron.ipcRenderer.startExtraction(targetDir, {
+          ...options,
+          debug: command,
+        });
+      } else {
+        window.electron.ipcRenderer.startExtraction(targetDir, {
+          ...options,
+          debug: options.isDebug && options.debug,
+        });
+      }
 
-  const startExtraction = async (command) => {
+      let ipcResponse;
+
+      while (!ipcResponse?.success) {
+        ipcResponse = await getIpcReturn('extractionResponseMain');
+
+        if (ipcResponse?.error) {
+          handleExtractionError(ipcResponse.error);
+        }
+      }
+
+      return setIsExtracting(false);
+    },
+    [
+      handleExtractionError,
+      options,
+      setDevConsoleLogs,
+      targetDir,
+      responseExtraction,
+    ]
+  );
+
+  const startPull = useCallback(async () => {
     setIsExtracting(true);
     setDevConsoleLogs([]);
-    setOpenSelectOption(false);
+    setOpenSelectPullOption(false);
     setShowDevConsole(true);
 
-    if (/[^A-z/\\ -:]/.test(targetDir)) {
+    if (/[^A-z/-:]/.test(targetDir)) {
       setIsExtracting(false);
       return setExtractionError({
         error:
-          'Invalid characters in target directory.\nExtraction path must only include english and dashes.',
+          'Invalid characters in target directory.\nExtraction path must includes only english and dashes.',
         actions: [
           <WfDangerButton onClick={() => responseExtraction('done')}>
             Abort
@@ -518,17 +619,11 @@ const AppContent = () => {
         ],
       });
     }
-    if (command) {
-      window.electron.ipcRenderer.startExtraction(targetDir, {
-        ...options,
-        debug: command,
-      });
-    } else {
-      window.electron.ipcRenderer.startExtraction(targetDir, {
-        ...options,
-        debug: options.isDebug && options.debug,
-      });
-    }
+    window.electron.ipcRenderer.startPull(targetDir, {
+      ...pullOptions,
+      region:
+        (['en', 'kr'].includes(pullOptions.regionVariant) && 'gl') || 'jp',
+    });
 
     let ipcResponse;
 
@@ -541,11 +636,38 @@ const AppContent = () => {
     }
 
     return setIsExtracting(false);
-  };
+  }, [
+    handleExtractionError,
+    pullOptions,
+    setDevConsoleLogs,
+    targetDir,
+    responseExtraction,
+  ]);
 
   const openTargetDir = () => {
     window.electron.ipcRenderer.openDirectory(targetDir);
   };
+
+  useEffect(() => {
+    if (targetDir) {
+      (async () => {
+        const ipcReturn = getIpcReturn('getMetaResponse');
+        await window.electron.ipcRenderer.getMeta(targetDir);
+        console.log(await ipcReturn);
+
+        setMeta(await ipcReturn);
+      })();
+    }
+  }, [targetDir, isExtracting]);
+
+  useEffect(() => {
+    if (meta && meta[`${pullOptions.regionVariant}LatestApiAssetVersion`]) {
+      onChangePullOptions(
+        'baseVersion',
+        meta[`${pullOptions.regionVariant}LatestApiAssetVersion`]
+      );
+    }
+  }, [meta]);
 
   useEffect(() => {
     window.electron.ipcRenderer.on('ipc-logger-log', (message, type) => {
@@ -614,9 +736,16 @@ const AppContent = () => {
     >
       <AppMainLayout>
         <WfCard style={{ width: '50%', height: '100%' }}>
-          <WfButton disabled>
-            <img src={viewerIcon} alt="viewer" width={24} />
-            Launch Data Viewer
+          <WfButton
+            disabled={!targetDir || isExtracting}
+            onClick={
+              targetDir && !isExtracting
+                ? () => setOpenSelectPullOption(true)
+                : () => {}
+            }
+          >
+            <img src={extractIcon} alt="extract" width={24} />
+            Pull/Download Assets
           </WfButton>
           <WfButton
             disabled={!targetDir || isExtracting}
@@ -626,7 +755,7 @@ const AppContent = () => {
                 : () => {}
             }
           >
-            <img src={extractIcon} alt="extract" width={24} />
+            <img src={viewerIcon} alt="viewer" width={24} />
             Extract Data
             {isExtracting && (
               <SpinImg
@@ -800,37 +929,6 @@ const AppContent = () => {
           Select the extraction options.
         </Typography>
         <LayoutFlexColumn>
-          <LayoutFlexDivideHalf>
-            <LayoutFlexSpaceBetween>
-              <LayoutFlexColumn>
-                <Typography>Skip Swf decompile</Typography>
-                <IndicatorTypo>
-                  Do not turn this on if its initial extraction.
-                </IndicatorTypo>
-              </LayoutFlexColumn>
-              <Switch
-                value={options.skipSwfDecompile}
-                onClick={() =>
-                  onChangeOptions('skipSwfDecompile', !options.skipSwfDecompile)
-                }
-              />
-            </LayoutFlexSpaceBetween>
-            <LayoutFlexSpaceBetween>
-              <LayoutFlexColumn>
-                <Typography>Skip Asset copy</Typography>
-                <IndicatorTypo>
-                  Do not turn this on if its initial extraction.
-                </IndicatorTypo>
-              </LayoutFlexColumn>
-              <Switch
-                value={options.skipDevicePull}
-                data-disabled={!options.skipSwfDecompile}
-                onClick={() =>
-                  onChangeOptions('skipDevicePull', !options.skipDevicePull)
-                }
-              />
-            </LayoutFlexSpaceBetween>
-          </LayoutFlexDivideHalf>
           <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
             <LayoutFlexSpaceBetween>
               <Typography>Extract master table</Typography>
@@ -947,22 +1045,7 @@ const AppContent = () => {
           <LayoutFlexDivideHalf style={{ marginTop: 8 }}>
             <LayoutFlexSpaceBetween>
               <LayoutFlexColumn>
-                <Typography>Custom emulator port</Typography>
-                <IndicatorTypo>
-                  Specify your emulator port if needed
-                </IndicatorTypo>
-              </LayoutFlexColumn>
-              <input
-                style={{ width: 80 }}
-                value={options.customPort}
-                onChange={(event) =>
-                  onChangeOptions('customPort', event.target.value)
-                }
-              />
-            </LayoutFlexSpaceBetween>
-            <LayoutFlexSpaceBetween>
-              <LayoutFlexColumn>
-                <Typography>Include duplicated frames for sprites</Typography>
+                <Typography>Include duplicated frames</Typography>
                 <IndicatorTypo>
                   This makes extraction process slower.
                 </IndicatorTypo>
@@ -999,23 +1082,6 @@ const AppContent = () => {
             </LayoutFlexSpaceBetween>
           )}
         </LayoutFlexColumn>
-        <IndicatorTypo style={{ marginTop: 16, marginLeft: 4 }}>
-          APK region (version)
-        </IndicatorTypo>
-        <ModalActions style={{ marginTop: 8 }}>
-          <WfSelectButton
-            data-selected={options.region === 'gl'}
-            onClick={() => onChangeOptions('region', 'gl')}
-          >
-            Global (USA, EU, SEA, KR)
-          </WfSelectButton>
-          <WfSelectButton
-            data-selected={options.region === 'jp'}
-            onClick={() => onChangeOptions('region', 'jp')}
-          >
-            Japan
-          </WfSelectButton>
-        </ModalActions>
         <ModalActions style={{ marginTop: 48 }}>
           <WfDangerButton
             style={{ width: 160 }}
@@ -1025,6 +1091,177 @@ const AppContent = () => {
           </WfDangerButton>
           <WfButton style={{ width: 160 }} onClick={() => startExtraction()}>
             Extract
+          </WfButton>
+        </ModalActions>
+      </Modal>
+      <Modal
+        style={{ width: 720 }}
+        open={!!openSelectPullOption}
+        onClose={() => {}}
+      >
+        <IndicatorTypo style={{ marginTop: 16, marginLeft: 4 }}>
+          Pull assets from
+        </IndicatorTypo>
+        <ModalActions style={{ marginTop: 8 }}>
+          <WfSelectButton
+            data-selected={pullOptions.variant === 'device'}
+            onClick={() => onChangePullOptions('variant', 'device')}
+          >
+            Device/Emulator
+          </WfSelectButton>
+          <WfSelectButton
+            data-selected={pullOptions.variant === 'api'}
+            onClick={() => onChangePullOptions('variant', 'api')}
+          >
+            From API
+          </WfSelectButton>
+        </ModalActions>
+        {(pullOptions.variant === 'api' && (
+          <LayoutFlexColumn style={{ marginTop: 24 }}>
+            <LayoutFlexDivideHalf>
+              <LayoutFlexSpaceBetween>
+                <LayoutFlexColumn>
+                  <Typography>Download delta(diff) only</Typography>
+                  <IndicatorTypo>Ignore full asset download</IndicatorTypo>
+                </LayoutFlexColumn>
+                <Switch
+                  value={pullOptions.ignoreFull}
+                  onClick={() =>
+                    onChangePullOptions('ignoreFull', !pullOptions.ignoreFull)
+                  }
+                />
+              </LayoutFlexSpaceBetween>
+            </LayoutFlexDivideHalf>
+            <LayoutFlexDivideHalf style={{ marginTop: 16 }}>
+              <LayoutFlexSpaceBetween>
+                <LayoutFlexColumn>
+                  <Typography>Base version</Typography>
+                  <IndicatorTypo>
+                    Input base asset version. EX) 1.531.10
+                  </IndicatorTypo>
+                </LayoutFlexColumn>
+                <input
+                  style={{ width: 80 }}
+                  value={pullOptions.baseVersion}
+                  placeholder="latest"
+                  onChange={(event) =>
+                    onChangePullOptions('baseVersion', event.target.value)
+                  }
+                />
+              </LayoutFlexSpaceBetween>
+              <LayoutFlexSpaceBetween>
+                <LayoutFlexColumn>
+                  <Typography>
+                    Latest fetched version:{' '}
+                    {meta?.[
+                      `${pullOptions.regionVariant}LatestApiAssetVersion`
+                    ] || 'N/A'}
+                  </Typography>
+                </LayoutFlexColumn>
+              </LayoutFlexSpaceBetween>
+            </LayoutFlexDivideHalf>
+            <LayoutFlexSpaceBetween style={{ marginTop: 16 }}>
+              <LayoutFlexColumn>
+                <Typography>Custom CDN address</Typography>
+                <IndicatorTypo>
+                  CDN address to replace {`{$cdnAddress}`} value.
+                </IndicatorTypo>
+              </LayoutFlexColumn>
+              <input
+                style={{ width: '50%' }}
+                value={pullOptions.customCdn}
+                onChange={(event) =>
+                  onChangePullOptions('customCdn', event.target.value)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+          </LayoutFlexColumn>
+        )) || (
+          <LayoutFlexColumn style={{ marginTop: 24 }}>
+            <LayoutFlexDivideHalf>
+              <LayoutFlexSpaceBetween>
+                <LayoutFlexColumn>
+                  <Typography>Skip Swf decompile</Typography>
+                  <IndicatorTypo>Will use packed boot_ffc6.as</IndicatorTypo>
+                </LayoutFlexColumn>
+                <Switch
+                  value={pullOptions.skipSwfDecompile}
+                  onClick={() =>
+                    onChangePullOptions(
+                      'skipSwfDecompile',
+                      !pullOptions.skipSwfDecompile
+                    )
+                  }
+                />
+              </LayoutFlexSpaceBetween>
+              <LayoutFlexSpaceBetween>
+                <LayoutFlexColumn>
+                  <Typography>Custom emulator port</Typography>
+                  <IndicatorTypo>
+                    Specify your emulator port if needed
+                  </IndicatorTypo>
+                </LayoutFlexColumn>
+                <input
+                  style={{ width: 80 }}
+                  value={pullOptions.customPort}
+                  onChange={(event) =>
+                    onChangePullOptions('customPort', event.target.value)
+                  }
+                />
+              </LayoutFlexSpaceBetween>
+            </LayoutFlexDivideHalf>
+            <LayoutFlexDivideHalf style={{ marginTop: 16 }}>
+              <LayoutFlexSpaceBetween>
+                <LayoutFlexColumn>
+                  <Typography>Full SWF Decompile</Typography>
+                  <IndicatorTypo>Will take up more then 10x time</IndicatorTypo>
+                </LayoutFlexColumn>
+                <Switch
+                  value={pullOptions.parseActionScript}
+                  data-disabled={pullOptions.skipSwfDecompile}
+                  onClick={() =>
+                    onChangePullOptions(
+                      'parseActionScript',
+                      !pullOptions.parseActionScript
+                    )
+                  }
+                />
+              </LayoutFlexSpaceBetween>
+            </LayoutFlexDivideHalf>
+          </LayoutFlexColumn>
+        )}
+        <IndicatorTypo style={{ marginTop: 16, marginLeft: 4 }}>
+          Target region (version)
+        </IndicatorTypo>
+        <ModalActions style={{ marginTop: 8 }}>
+          <WfSelectButton
+            data-selected={pullOptions.regionVariant === 'en'}
+            onClick={() => onChangePullOptions('regionVariant', 'en')}
+          >
+            EN
+          </WfSelectButton>
+          <WfSelectButton
+            data-selected={pullOptions.regionVariant === 'kr'}
+            onClick={() => onChangePullOptions('regionVariant', 'kr')}
+          >
+            KR
+          </WfSelectButton>
+          <WfSelectButton
+            data-selected={pullOptions.regionVariant === 'jp'}
+            onClick={() => onChangePullOptions('regionVariant', 'jp')}
+          >
+            Japan
+          </WfSelectButton>
+        </ModalActions>
+        <ModalActions style={{ marginTop: 48 }}>
+          <WfDangerButton
+            style={{ width: 160 }}
+            onClick={() => setOpenSelectPullOption(false)}
+          >
+            Abort
+          </WfDangerButton>
+          <WfButton style={{ width: 160 }} onClick={() => startPull()}>
+            Pull assets
           </WfButton>
         </ModalActions>
       </Modal>

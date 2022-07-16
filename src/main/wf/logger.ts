@@ -68,8 +68,8 @@ class Logger {
     let count = 0;
 
     return {
-      progress: () => {
-        count += 1;
+      progress: (add = 1) => {
+        count += add;
         this.data({
           type: 'progress',
           data: {
@@ -88,6 +88,16 @@ class Logger {
         this.log(`${id} Done`);
       },
     };
+  };
+
+  progressAbort = (id) => {
+    this.data({
+      type: 'progressEnd',
+      data: {
+        id,
+      },
+    });
+    this.log(`${id} Done`);
   };
 
   devLog = (...args) => {

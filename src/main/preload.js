@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('electron', {
     startExtraction(rootDir, options) {
       ipcRenderer.send('startExtraction', rootDir, options);
     },
+    startPull(rootDir, options) {
+      ipcRenderer.send('startPull', rootDir, options);
+    },
     openExternal(external) {
       shell.openExternal(external);
     },
@@ -19,6 +22,9 @@ contextBridge.exposeInMainWorld('electron', {
     },
     clearMeta(rootDir, targetData) {
       ipcRenderer.send('clearMeta', rootDir, targetData);
+    },
+    getMeta(rootDir) {
+      ipcRenderer.send('getMeta', rootDir);
     },
     getAppVersion() {
       ipcRenderer.send('getAppVersion');

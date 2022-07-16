@@ -19,6 +19,7 @@ import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import logger from './wf/logger';
 import WfExtractor from './wf';
+import { asyncReadFile } from './wf/helpers';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -92,6 +93,120 @@ ipcMain.on('extractionResponseRenderer', async (event, response) => {
   extractionProcessor.resolveAwait(response);
 });
 
+ipcMain.on('getMeta', async (event, rootDir) => {
+  let meta = {};
+
+  try {
+    meta = JSON.parse(await asyncReadFile(`${rootDir}/metadata.json`));
+  } catch (err) {
+    console.log(err);
+  }
+  event.reply('getMetaResponse', meta);
+});
+
+ipcMain.on(
+  'startPull',
+  async (
+    event,
+    rootDir,
+    {
+      region,
+      regionVariant,
+      variant,
+      baseVersion,
+      ignoreFull,
+      skipSwfDecompile,
+      parseActionScript,
+      customPort,
+      customCdn,
+    }
+  ) => {
+    let replyPacket;
+    let extractionPhase = 0;
+
+    const wfExtractor = new WfExtractor({
+      region,
+      regionVariant,
+      rootDir,
+      swfMode: (parseActionScript && 'full') || 'simple',
+      customPort,
+      extractAllFrames: false,
+    });
+
+    while (replyPacket !== 'done') {
+      if (/phase/.test(replyPacket)) {
+        const targetPhase = parseFloat(replyPacket.split(':')[1]);
+
+        extractionPhase = targetPhase;
+      }
+      try {
+        if (extractionPhase <= 0) {
+          await wfExtractor.init();
+          extractionPhase = 1;
+        }
+
+        switch (variant) {
+          case 'device': {
+            if (extractionPhase <= 1) {
+              if (/selectDevice/.test(replyPacket)) {
+                const deviceId = replyPacket.replace(/selectDevice/, '');
+                await wfExtractor.selectDevice(deviceId);
+              } else {
+                await wfExtractor.selectDevice();
+              }
+
+              extractionPhase = 2;
+            }
+
+            if (extractionPhase <= 2) {
+              await wfExtractor.connectAdbShell();
+              extractionPhase = 3;
+            }
+
+            if (skipSwfDecompile) {
+              extractionPhase = 4;
+            }
+
+            if (extractionPhase <= 3) {
+              await wfExtractor.dumpAndExtractApk();
+              await wfExtractor.decompileAndExportSwf();
+              extractionPhase = 4;
+            }
+
+            if (extractionPhase <= 4) {
+              await wfExtractor.indexWfAssets();
+              await wfExtractor.dumpWfAssets();
+              await wfExtractor.mergeAssets();
+              extractionPhase = 4.5;
+            }
+
+            break;
+          }
+          case 'api': {
+            await wfExtractor.fetchAssetsFromApi(baseVersion, {
+              ...(customCdn && { cdn: customCdn }),
+              ignoreFull,
+            });
+
+            break;
+          }
+          default: {
+            throw new Error(`Variant ${variant} not defined.`);
+          }
+        }
+
+        break;
+      } catch (err) {
+        event.reply('extractionResponseMain', {
+          error: err?.message || 'UNKNOWN',
+        });
+        replyPacket = await extractionProcessor.awaitNextPacket();
+      }
+    }
+    event.reply('extractionResponseMain', { success: true });
+  }
+);
+
 ipcMain.on(
   'startExtraction',
   async (
@@ -99,8 +214,6 @@ ipcMain.on(
     rootDir,
     {
       region,
-      skipSwfDecompile,
-      skipDevicePull,
       extractMaster,
       extractCharacterImage,
       extractMiscImage,
@@ -128,11 +241,11 @@ ipcMain.on(
     if (debug) {
       const start = new Date().getTime();
       try {
-        logger.log(`Excuting command ${debug}`);
+        logger.log(`Executing command ${debug}`);
         await wfExtractor.development(debug);
       } catch (err) {
         console.log(err);
-        logger.log(`Error excuting command ${debug}`);
+        logger.log(`Error executing command ${debug}`);
         logger.log(err?.message || `${err}`);
       }
       const end = new Date().getTime();
@@ -160,43 +273,6 @@ ipcMain.on(
         if (extractionPhase <= 0) {
           await wfExtractor.init();
           extractionPhase = 1;
-        }
-
-        if (skipDevicePull) {
-          extractionPhase = 4.5;
-        }
-
-        if (skipSwfDecompile) {
-          extractionPhase = 4;
-        }
-
-        if (extractionPhase <= 1) {
-          if (/selectDevice/.test(replyPacket)) {
-            const deviceId = replyPacket.replace(/selectDevice/, '');
-            await wfExtractor.selectDevice(deviceId);
-          } else {
-            await wfExtractor.selectDevice();
-          }
-
-          extractionPhase = 2;
-        }
-
-        if (extractionPhase <= 2) {
-          await wfExtractor.connectAdbShell();
-          extractionPhase = 3;
-        }
-
-        if (extractionPhase <= 3) {
-          await wfExtractor.dumpAndExtractApk();
-          await wfExtractor.decompileAndExportSwf();
-          extractionPhase = 4;
-        }
-
-        if (extractionPhase <= 4) {
-          await wfExtractor.indexWfAssets();
-          await wfExtractor.dumpWfAssets();
-          await wfExtractor.mergeAssets();
-          extractionPhase = 4.5;
         }
 
         if (extractionPhase <= 4.5) {
@@ -267,6 +343,7 @@ ipcMain.on(
 
         break;
       } catch (err) {
+        console.log(err);
         logger.log(`Error ocurred while extraction: ${err?.message || err}`);
 
         event.reply('extractionResponseMain', {

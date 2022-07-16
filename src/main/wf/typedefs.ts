@@ -14,6 +14,9 @@ export type WFExtractorMetaData = {
   lastPackageVersion: string;
   lastSwfChecksum: string;
   lastSwfMode: 'full' | 'simple';
+  jpLatestApiAssetVersion: string;
+  krLatestApiAssetVersion: string;
+  enLatestApiAssetVersion: string;
   spriteProcessedLock: string[];
   specialSpriteProcessedLock: string[];
   lockedHashMap: boolean;

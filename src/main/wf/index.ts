@@ -5,6 +5,8 @@ import path from 'path';
 import AdmZip from 'adm-zip';
 import crypto from 'crypto';
 import rimraf from 'rimraf';
+import fetch from 'node-fetch';
+import msgpack from 'msgpack-lite';
 import { app } from 'electron';
 import { ChildProcess, spawn } from 'child_process';
 import { mkdir, readdir, readFile, stat, writeFile } from 'fs/promises';
@@ -21,6 +23,7 @@ import {
   refineLs,
   sleep,
   spawnCommand,
+  withAsyncBandwidth,
 } from './helpers';
 import {
   BASE_ODD_MAP,
@@ -38,6 +41,18 @@ import {
 const RESOURCES_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'assets')
   : path.join(__dirname, '../../../assets');
+
+const API_PATHS = {
+  base: {
+    jp: 'https://api.worldflipper.jp/latest/api/index.php/gacha/exec',
+    en: 'https://na.wdfp.kakaogames.com/latest/api/index.php/gacha/exec',
+    kr: 'https://kr.wdfp.kakaogames.com/latest/api/index.php/gacha/exec',
+  },
+  cdn: {
+    en: 'http://patch.wdfp.kakaogames.com/Live/2.0.0',
+    kr: 'http://patch.wdfp.kakaogames.com/Live/2.0.0',
+  },
+};
 
 const getAssetPath = (...paths: string[]): string => {
   return path.join(RESOURCES_PATH, ...paths);
@@ -177,7 +192,9 @@ class WfExtractor {
 
   ADB_ROOT = false;
 
-  target: 'gl' | 'jp';
+  region: 'gl' | 'jp';
+
+  regionVariant: 'en' | 'kr' | 'jp';
 
   APK_NAME_KEY = {
     gl: 'wdfp',
@@ -198,6 +215,7 @@ class WfExtractor {
     customPort,
     swfMode,
     extractAllFrames,
+    regionVariant,
   }: { swfMode: 'simple' | 'full' } = {}) {
     this.metadata = {};
     this.swfMode = swfMode || 'simple';
@@ -212,6 +230,10 @@ class WfExtractor {
       logger.log(`Target region set as ${region}`);
     }
     this.region = region || 'jp';
+    if (regionVariant) {
+      logger.log(`Target region variant set as ${regionVariant}`);
+    }
+    this.regionVariant = regionVariant || 'jp';
   }
 
   dev = async () => {
@@ -442,16 +464,20 @@ class WfExtractor {
   };
 
   buildDigestFileMap = async () => {
-    if (this.metadata.lockedHashMap) {
-      logger.log(`Loading saved hashmap.`);
-      await this.fileReader.loadSavedDigestFileMap();
-    } else {
-      logger.log(`Building asset digest hash map...`);
-      await this.fileReader.buildDigestFileMap();
-      logger.log(`Successfully built asset digest hash map.`);
-      this.markMetaData({
-        lockedHashMap: true,
-      });
+    try {
+      if (this.metadata.lockedHashMap) {
+        logger.log(`Loading saved hashmap.`);
+        await this.fileReader.loadSavedDigestFileMap();
+      } else {
+        logger.log(`Building asset digest hash map...`);
+        await this.fileReader.buildDigestFileMap();
+        logger.log(`Successfully built asset digest hash map.`);
+        this.markMetaData({
+          lockedHashMap: true,
+        });
+      }
+    } catch (err) {
+      console.log('Failed to generate hashmap.');
     }
   };
 
@@ -741,7 +767,12 @@ class WfExtractor {
     }
 
     if (!this.filePaths?.length) {
-      throw new Error('FAILED_TO_LOAD_PATHS');
+      logger.log(
+        'ERR: File paths not found... Using default file path list (SOME ASSETS MAY OMITTED DUE TO OUTDATED FILE PATH LIST)'
+      );
+      this.filePaths = JSON.parse(
+        (await readFile(getAssetPath('/filePaths.lock'))).toString()
+      );
     }
   };
 
@@ -760,7 +791,9 @@ class WfExtractor {
     }
 
     if (!this.asFilePaths?.length) {
-      this.asFilePaths = [];
+      this.asFilePaths = JSON.parse(
+        (await readFile(getAssetPath('/asFilePaths.lock'))).toString()
+      );
     }
   };
 
@@ -779,39 +812,77 @@ class WfExtractor {
   };
 
   getCharacterList = async ({ raw }: { raw: boolean } = {}) => {
-    if (this.characterListCache && !raw) return this.characterListCache;
+    try {
+      if (this.characterListCache && !raw) return this.characterListCache;
 
-    const characterData = JSON.parse(
-      (
-        await asyncReadFile(
-          `${this.ROOT_PATH}/output/orderedmap/character/character.json`
-        )
-      ).toString()
-    );
+      const characterData = JSON.parse(
+        (
+          await asyncReadFile(
+            `${this.ROOT_PATH}/output/orderedmap/character/character.json`
+          )
+        ).toString()
+      );
 
-    if (raw) {
-      return characterData;
+      if (raw) {
+        return characterData;
+      }
+
+      let characters = Object.values(characterData).map(([name]) => name);
+
+      characters.push(
+        ...Object.keys(
+          JSON.parse(
+            (
+              await asyncReadFile(
+                `${this.ROOT_PATH}/output/orderedmap/generated/trimmed_image.json`
+              )
+            ).toString()
+          )
+        ).map((key) => key.split('/')[1])
+      );
+
+      characters = [...new Set(characters)];
+
+      this.characterListCache = characters;
+
+      return characters;
+    } catch (err) {
+      return [];
     }
+  };
 
-    let characters = Object.values(characterData).map(([name]) => name);
+  extractCharacter = async (character) => {
+    const characterImageDigests = CHARACTER_SPRITE_PRESETS.map((preset) =>
+      new Array(3).fill().map((_, idx) => preset(character, idx))
+    )
+      .reduce((acc, array) => [...acc, ...array], [])
+      .map((file) => [`${file}.png`, digestWfFileName(`${file}.png`)]);
 
-    characters.push(
-      ...Object.keys(
-        JSON.parse(
-          (
-            await asyncReadFile(
-              `${this.ROOT_PATH}/output/orderedmap/generated/trimmed_image.json`
-            )
-          ).toString()
-        )
-      ).map((key) => key.split('/')[1])
-    );
+    const characterImagePaths = [];
 
-    characters = [...new Set(characters)];
+    const digestTracker = logger.progressStart({
+      id: 'Generating digests for possible assets...',
+      max: characterImageDigests.length,
+    });
+    for (const [fileName, digest] of characterImageDigests) {
+      digestTracker.progress();
+      const filePath = await this.fileReader.checkDigestPath(digest);
+        if (!filePath) continue; // eslint-disable-line
+      characterImagePaths.push([fileName, filePath]);
+    }
+    digestTracker.end();
 
-    this.characterListCache = characters;
+    const imageTracker = logger.progressStart({
+      id: 'Exporting character image assets...',
+      max: characterImagePaths.length,
+    });
+    for (const [fileName, filePath] of characterImagePaths) {
+      imageTracker.progress();
+      await this.fileReader.readPngAndGenerateOutput(filePath, fileName);
+    }
+    imageTracker.end();
 
-    return characters;
+    logger.log('Successfully extracted character image assets.');
   };
 
   extractCharacterImageAssets = async () => {
@@ -869,78 +940,85 @@ class WfExtractor {
   };
 
   extractCharacterVoiceAssets = async () => {
-    const characterMap = await this.getCharacterList({ raw: true });
-    const characterSpeeches = JSON.parse(
-      (
-        await asyncReadFile(
-          `${this.ROOT_PATH}/output/orderedmap/character/character_speech.json`
-        )
-      ).toString()
-    );
-
-    const speechEntries = Object.entries(characterSpeeches);
-
-    logger.log('Start extracting character voice assets.');
-    const tracker = logger.progressStart({
-      id: 'Extracting character voice assets...',
-      max: speechEntries.length,
-    });
-
-    for (const [characterId, speechesRaw] of speechEntries) {
-      tracker.progress();
-      const characterData = characterMap[characterId];
-      const speeches = speechesRaw.slice(3);
-      if (!characterData) continue;
-
-      const [name] = characterData;
-
-      const voiceAssetPaths = CHARACTER_VOICE_PRESETS.map((preset) =>
-        preset(name)
+    try {
+      const characterMap = await this.getCharacterList({ raw: true });
+      const characterSpeeches = JSON.parse(
+        (
+          await asyncReadFile(
+            `${this.ROOT_PATH}/output/orderedmap/character/character_speech.json`
+          )
+        ).toString()
       );
-      const voiceLineTexts = {};
 
-      speeches.forEach((speech, idx) => {
-        if (POSSIBLE_PATH_REGEX.test(speech)) {
-          speech.split('\\n').forEach((speechPath) => {
-            if (speechPath.includes('/')) {
-              voiceAssetPaths.push(`character/${name}/voice/${speechPath}.mp3`);
-            }
-          });
-        } else if (speech.length > 5) {
-          const voiceTitle = speeches[idx + 1]?.split('\\n')?.[0];
-          if (voiceTitle) {
-            voiceLineTexts[voiceTitle] = speech;
-          }
-        }
+      const speechEntries = Object.entries(characterSpeeches);
+
+      logger.log('Start extracting character voice assets.');
+      const tracker = logger.progressStart({
+        id: 'Extracting character voice assets...',
+        max: speechEntries.length,
       });
 
-      const dedupedVoiceAssetPaths = [...new Set(voiceAssetPaths)];
+      for (const [characterId, speechesRaw] of speechEntries) {
+        tracker.progress();
+        const characterData = characterMap[characterId];
+        const speeches = speechesRaw.slice(3);
+        if (!characterData || !speeches?.forEach) continue;
 
-      const pathDigests = (
-        await Promise.all(
-          dedupedVoiceAssetPaths.map(async (voicePath) => {
-            const digest = digestWfFileName(voicePath);
-            const digestPath = await this.fileReader.checkDigestPath(digest);
+        const [name] = characterData;
 
-            if (!digestPath) return null;
+        const voiceAssetPaths = CHARACTER_VOICE_PRESETS.map((preset) =>
+          preset(name)
+        );
+        const voiceLineTexts = {};
+        speeches.forEach((speech, idx) => {
+          if (POSSIBLE_PATH_REGEX.test(speech)) {
+            speech.split('\\n').forEach((speechPath) => {
+              if (speechPath.includes('/')) {
+                voiceAssetPaths.push(
+                  `character/${name}/voice/${speechPath}.mp3`
+                );
+              }
+            });
+          } else if (speech.length > 5) {
+            const voiceTitle = speeches[idx + 1]?.split('\\n')?.[0];
+            if (voiceTitle) {
+              voiceLineTexts[voiceTitle] = speech;
+            }
+          }
+        });
 
-            return [voicePath, digestPath];
-          })
-        )
-      ).filter((v) => v);
+        const dedupedVoiceAssetPaths = [...new Set(voiceAssetPaths)];
 
-      await this.fileReader.writeWfAsset(
-        `character/${name}/voice/voiceLines.json`,
-        JSON.stringify(voiceLineTexts, null, 4)
-      );
+        const pathDigests = (
+          await Promise.all(
+            dedupedVoiceAssetPaths.map(async (voicePath) => {
+              const digest = digestWfFileName(voicePath);
+              const digestPath = await this.fileReader.checkDigestPath(digest);
 
-      for (const [fileName, filePath] of pathDigests) {
-        await this.fileReader.readMp3AndGenerateOutput(filePath, fileName);
+              if (!digestPath) return null;
+
+              return [voicePath, digestPath];
+            })
+          )
+        ).filter((v) => v);
+
+        if (pathDigests.length) {
+          await this.fileReader.writeWfAsset(
+            `character/${name}/voice/voiceLines.json`,
+            JSON.stringify(voiceLineTexts, null, 4)
+          );
+        }
+
+        for (const [fileName, filePath] of pathDigests) {
+          await this.fileReader.readMp3AndGenerateOutput(filePath, fileName);
+        }
       }
-    }
 
-    tracker.end();
-    logger.log('Extracted character voice assets.');
+      tracker.end();
+      logger.log('Extracted character voice assets.');
+    } catch (err) {
+      return null;
+    }
   };
 
   extractCharacterSpriteMetaDatas = async () => {
@@ -999,59 +1077,64 @@ class WfExtractor {
       cropProps = {},
     } = {}
   ) => {
-    const timelineName = timelineRoot || 'pixelart';
+    try {
+      const timelineName = timelineRoot || 'pixelart';
 
-    const spriteImage = await asyncReadFile(`${spritePath}/${sheetName}.png`);
-    console.log(`${spritePath}/${sheetName}.atlas.json`);
-    const spriteAtlases = JSON.parse(
-      (await asyncReadFile(`${spritePath}/${sheetName}.atlas.json`)).toString()
-    );
-    const images = await this.fileReader.cropSpritesFromAtlas({
-      sprite: spriteImage,
-      atlases: spriteAtlases,
-      destPath: `${spritePath}/${sheetName}`,
-      extractAll,
-      scale,
-      ...cropProps,
-    });
+      const spriteImage = await asyncReadFile(`${spritePath}/${sheetName}.png`);
+      const spriteAtlases = JSON.parse(
+        (
+          await asyncReadFile(`${spritePath}/${sheetName}.atlas.json`)
+        ).toString()
+      );
+      const images = await this.fileReader.cropSpritesFromAtlas({
+        sprite: spriteImage,
+        atlases: spriteAtlases,
+        destPath: `${spritePath}/${sheetName}`,
+        extractAll,
+        scale,
+        ...cropProps,
+      });
 
-    if (!images) return;
+      if (!images) return;
 
-    if (animate) {
-      let timeline;
+      if (animate) {
+        let timeline;
 
-      try {
-        timeline = JSON.parse(
-          (
-            await asyncReadFile(`${spritePath}/${timelineName}.timeline.json`)
-          ).toString()
-        );
-      } catch (err) {
-        console.log(err, `${spritePath}/${timelineName}.timeline.json`);
-        return;
+        try {
+          timeline = JSON.parse(
+            (
+              await asyncReadFile(`${spritePath}/${timelineName}.timeline.json`)
+            ).toString()
+          );
+        } catch (err) {
+          console.log(err, `${spritePath}/${timelineName}.timeline.json`);
+          return;
+        }
+        await asyncMkdir(`${spritePath}/animated`, { recursive: true });
+
+        const indexMode = images[0].frameId.replace(/[^0-9]/g, '').length
+          ? 'saveName'
+          : 'arrayIndex';
+        let maxSequenceIndex;
+        if (indexMode === 'arrayIndex') {
+          maxSequenceIndex = Math.max(
+            ...timeline.sequences.map((sequence) => parseInt(sequence.end, 10))
+          );
+        }
+
+        for (const sequence of timeline.sequences) {
+          await this.fileReader.createGifFromSequence({
+            images,
+            sequence,
+            destPath: `${spritePath}/animated`,
+            delay: 100,
+            indexMode,
+            maxIndex: maxSequenceIndex,
+          });
+        }
       }
-      await asyncMkdir(`${spritePath}/animated`, { recursive: true });
-
-      const indexMode = images[0].frameId.replace(/[^0-9]/g, '').length
-        ? 'saveName'
-        : 'arrayIndex';
-      let maxSequenceIndex;
-      if (indexMode === 'arrayIndex') {
-        maxSequenceIndex = Math.max(
-          ...timeline.sequences.map((sequence) => parseInt(sequence.end, 10))
-        );
-      }
-
-      for (const sequence of timeline.sequences) {
-        await this.fileReader.createGifFromSequence({
-          images,
-          sequence,
-          destPath: `${spritePath}/animated`,
-          delay: 100,
-          indexMode,
-          maxIndex: maxSequenceIndex,
-        });
-      }
+    } catch (err) {
+      console.log(err);
     }
   };
 
@@ -1076,11 +1159,6 @@ class WfExtractor {
       !this.metadata.specialSpriteProcessedLock?.includes(character) ||
       ignoreCache
     ) {
-      await asyncMkdir(
-        `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated`,
-        { recursive: true }
-      );
-
       const specialImage = await asyncReadFile(
         `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet.png`
       );
@@ -1090,6 +1168,10 @@ class WfExtractor {
             `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet.atlas.json`
           )
         ).toString()
+      );
+      await asyncMkdir(
+        `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated`,
+        { recursive: true }
       );
       await this.fileReader.cropSpritesFromAtlas({
         sprite: specialImage,
@@ -1131,34 +1213,39 @@ class WfExtractor {
   };
 
   buildAsFilePaths = async () => {
-    const foundAsFiles = [];
-    const recurseFind = async (parentPath) => {
-      const children = await readdir(parentPath, { withFileTypes: true });
+    try {
+      const foundAsFiles = [];
+      const recurseFind = async (parentPath) => {
+        const children = await readdir(parentPath, { withFileTypes: true });
 
-      for (const child of children) {
-        const childPath = `${parentPath}/${child.name}`;
+        for (const child of children) {
+          const childPath = `${parentPath}/${child.name}`;
 
-        if (/\.as/.test(child.name)) {
-          foundAsFiles.push(childPath);
-        } else if (child.isDirectory()) {
-          await recurseFind(childPath);
+          if (/\.as/.test(child.name)) {
+            foundAsFiles.push(childPath);
+          } else if (child.isDirectory()) {
+            await recurseFind(childPath);
+          }
         }
-      }
-    };
-    logger.log('Searching for script files...');
-    await recurseFind(`${this.ROOT_PATH}/swf/scripts`);
-    logger.log(`${foundAsFiles.length} scripts found.`);
+      };
+      logger.log('Searching for script files...');
+      await recurseFind(`${this.ROOT_PATH}/swf/scripts`);
+      logger.log(`${foundAsFiles.length} scripts found.`);
 
-    const asFilePaths = await this.fileReader.getAssetsFromAsFiles(
-      foundAsFiles
-    );
+      const asFilePaths = await this.fileReader.getAssetsFromAsFiles(
+        foundAsFiles
+      );
 
-    this.asFilePaths = asFilePaths || [];
+      this.asFilePaths = asFilePaths || [];
 
-    await writeFile(
-      `${this.ROOT_PATH}/asFilePaths.lock`,
-      JSON.stringify(asFilePaths)
-    );
+      await writeFile(
+        `${this.ROOT_PATH}/asFilePaths.lock`,
+        JSON.stringify(asFilePaths)
+      );
+    } catch (err) {
+      console.log(err);
+      logger.log('Failed to search script files.');
+    }
   };
 
   digestAndCheckFilePath = async (filePath) => {
@@ -1194,7 +1281,7 @@ class WfExtractor {
 
     for (const filePath of [
       ...new Set([...(this.asFilePaths || []), ...this.filePaths]),
-    ]) {
+    ].filter((value) => !!value)) {
       pushExist(
         possibleImageAssets,
         await this.digestAndCheckFilePath(`${filePath}.png`)
@@ -1232,7 +1319,7 @@ class WfExtractor {
     await this.developWriteJson('image_assets.json', possibleImageAssets);
 
     const amf3Tracker = logger.progressStart({
-      id: 'Searching for possible atlases...',
+      id: 'Searching for possible amf3 assets...',
       max: possibleImageAssets.length,
     });
     for (const [imagePath] of possibleImageAssets) {
@@ -1316,7 +1403,11 @@ class WfExtractor {
     });
     for (const [fileName, filePath] of possibleAudioAssets) {
       audioTracker.progress();
-      await this.fileReader.readMp3AndGenerateOutput(filePath, fileName);
+      try {
+        await this.fileReader.readMp3AndGenerateOutput(filePath, fileName);
+      } catch (err) {
+        console.log(err);
+      }
     }
     audioTracker.end();
   };
@@ -1564,132 +1655,138 @@ class WfExtractor {
   };
 
   extractGachaOdds = async () => {
-    const gachaFile = JSON.parse(
-      await readFile(`${this.ROOT_PATH}/output/orderedmap/gacha/gacha.json`)
-    );
+    try {
+      const gachaFile = JSON.parse(
+        await readFile(`${this.ROOT_PATH}/output/orderedmap/gacha/gacha.json`)
+      );
 
-    const characterTextMap = await this.readCharacterTextFile();
+      const gachaTracker = logger.progressStart({
+        id: 'Exporting gacha odds table...',
+        max: Object.values(gachaFile).length,
+      });
 
-    await mkdir(`${this.ROOT_PATH}/output/orderedmap/gacha_odds/summaries`, {
-      recursive: true,
-    });
+      const characterTextMap = await this.readCharacterTextFile();
 
-    const equipmentTextMap = JSON.parse(
-      (
-        await asyncReadFile(
-          `${this.ROOT_PATH}/output/orderedmap/item/equipment.json`
-        )
-      ).toString()
-    );
+      await mkdir(`${this.ROOT_PATH}/output/orderedmap/gacha_odds/summaries`, {
+        recursive: true,
+      });
 
-    const gachaTracker = logger.progressStart({
-      id: 'Exporting gacha odds table...',
-      max: Object.values(gachaFile).length,
-    });
-    for (const [
-      id,
-      name,
-      ,
-      banner,
-      ,
-      ,
-      ,
-      ,
-      ,
-      ,
-      ,
-      ,
-      ,
-      equipmentFlag,
-      rarity3Path,
-      rarity4Path,
-      rarity5Path,
-      ,
-      ,
-      ,
-      ,
-      ,
-      equipmentRarity3Path,
-      equipmentRarity4Path,
-      equipmentRarity5Path,
-    ] of Object.values(gachaFile)) {
-      gachaTracker.progress();
-      const isEquipment = equipmentFlag === '1';
-      const oddFilePaths = [];
+      const equipmentTextMap = JSON.parse(
+        (
+          await asyncReadFile(
+            `${this.ROOT_PATH}/output/orderedmap/item/equipment.json`
+          )
+        ).toString()
+      );
 
-      if (isEquipment) {
-        oddFilePaths.push(
-          `master/gacha_odds/${equipmentRarity3Path}.orderedmap`,
-          `master/gacha_odds/${equipmentRarity4Path}.orderedmap`,
-          `master/gacha_odds/${equipmentRarity5Path}.orderedmap`
-        );
-      } else {
-        oddFilePaths.push(
-          `master/gacha_odds/${rarity3Path}.orderedmap`,
-          `master/gacha_odds/${rarity4Path}.orderedmap`,
-          `master/gacha_odds/${rarity5Path}.orderedmap`
-        );
-      }
-
-      const gachaOddsMap = {
+      for (const [
+        id,
         name,
+        ,
         banner,
-      };
+        ,
+        ,
+        ,
+        ,
+        ,
+        ,
+        ,
+        ,
+        ,
+        equipmentFlag,
+        rarity3Path,
+        rarity4Path,
+        rarity5Path,
+        ,
+        ,
+        ,
+        ,
+        ,
+        equipmentRarity3Path,
+        equipmentRarity4Path,
+        equipmentRarity5Path,
+      ] of Object.values(gachaFile)) {
+        gachaTracker.progress();
+        const isEquipment = equipmentFlag === '1';
+        const oddFilePaths = [];
 
-      for (const filePath of oddFilePaths) {
-        const found = await this.digestAndCheckFilePath(filePath);
-        if (found) {
-          const gachaOddsData =
-            await this.fileReader.readMasterTableAndGenerateOutput(
-              found[1],
-              found[0]
+        if (isEquipment) {
+          oddFilePaths.push(
+            `master/gacha_odds/${equipmentRarity3Path}.orderedmap`,
+            `master/gacha_odds/${equipmentRarity4Path}.orderedmap`,
+            `master/gacha_odds/${equipmentRarity5Path}.orderedmap`
+          );
+        } else {
+          oddFilePaths.push(
+            `master/gacha_odds/${rarity3Path}.orderedmap`,
+            `master/gacha_odds/${rarity4Path}.orderedmap`,
+            `master/gacha_odds/${rarity5Path}.orderedmap`
+          );
+        }
+
+        const gachaOddsMap = {
+          name,
+          banner,
+        };
+
+        for (const filePath of oddFilePaths) {
+          const found = await this.digestAndCheckFilePath(filePath);
+          if (found) {
+            const gachaOddsData =
+              await this.fileReader.readMasterTableAndGenerateOutput(
+                found[1],
+                found[0]
+              );
+
+            const oddsList = Object.values(Object.values(gachaOddsData)[0]);
+
+            const oddsInBetterFormat = oddsList.map(
+              ([characterId, rank, odd, isPickup]) => {
+                const characterName = isEquipment
+                  ? equipmentTextMap[characterId][0]
+                  : characterTextMap[characterId][0];
+
+                return {
+                  name: characterName,
+                  rank: parseInt(rank, 10),
+                  odd: parseInt(odd, 10),
+                  isPickup: isPickup === 'true',
+                };
+              }
             );
 
-          const oddsList = Object.values(Object.values(gachaOddsData)[0]);
-
-          const oddsInBetterFormat = oddsList.map(
-            ([characterId, rank, odd, isPickup]) => {
-              const characterName = isEquipment
-                ? equipmentTextMap[characterId][0]
-                : characterTextMap[characterId][0];
-
-              return {
-                name: characterName,
-                rank: parseInt(rank, 10),
-                odd: parseInt(odd, 10),
-                isPickup: isPickup === 'true',
-              };
-            }
-          );
-
-          const totalOdds = oddsInBetterFormat.reduce(
-            (acc, cur) => acc + cur.odd,
-            0
-          );
-          gachaOddsMap[`rarity${oddsInBetterFormat[0].rank}`] =
-            oddsInBetterFormat.map((odd) => ({
-              ...odd,
-              localRate: parseFloat(
-                (Math.floor((odd.odd / totalOdds) * 100000) / 1000).toFixed(3)
-              ),
-              rate: parseFloat(
-                (
-                  Math.floor(
-                    (odd.odd / totalOdds) * BASE_ODD_MAP[odd.rank] * 100000
-                  ) / 1000
-                ).toFixed(3)
-              ),
-            }));
+            const totalOdds = oddsInBetterFormat.reduce(
+              (acc, cur) => acc + cur.odd,
+              0
+            );
+            gachaOddsMap[`rarity${oddsInBetterFormat[0].rank}`] =
+              oddsInBetterFormat.map((odd) => ({
+                ...odd,
+                localRate: parseFloat(
+                  (Math.floor((odd.odd / totalOdds) * 100000) / 1000).toFixed(3)
+                ),
+                rate: parseFloat(
+                  (
+                    Math.floor(
+                      (odd.odd / totalOdds) * BASE_ODD_MAP[odd.rank] * 100000
+                    ) / 1000
+                  ).toFixed(3)
+                ),
+              }));
+          }
         }
+
+        await writeFile(
+          `${this.ROOT_PATH}/output/orderedmap/gacha_odds/summaries/${id}_${name}.json`,
+          JSON.stringify(gachaOddsMap, null, 2)
+        );
       }
 
-      await writeFile(
-        `${this.ROOT_PATH}/output/orderedmap/gacha_odds/summaries/${id}_${name}.json`,
-        JSON.stringify(gachaOddsMap, null, 2)
-      );
+      gachaTracker.end();
+    } catch (err) {
+      logger.log('FATAL: Failed to extract gacha info.');
+      logger.progressAbort('Exporting gacha odds table...');
     }
-
-    gachaTracker.end();
   };
 
   extractEXBoostMasterTable = async () => {
@@ -1921,6 +2018,211 @@ class WfExtractor {
     );
   };
 
+  fetchAssetsFromApi = async (
+    baseVersion,
+    { cdn = API_PATHS.cdn[this.regionVariant], ignoreFull } = {}
+  ) => {
+    try {
+      const fileListTracker = logger.progressStart({
+        id: 'Fetching asset file list from server...',
+        max: 1,
+      });
+
+      const requestHeaders = {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
+        Accept: 'gzip, deflate, br',
+        RES_VER: baseVersion || `1.532.1`,
+        ...(this.regionVariant !== 'jp' && {
+          DEVICE_LANG: (this.regionVariant === 'en' && 'en') || 'ko',
+        }),
+      };
+
+      console.log(API_PATHS.base[this.regionVariant], requestHeaders);
+
+      let fileListRes;
+      try {
+        fileListRes = await fetch(API_PATHS.base[this.regionVariant], {
+          method: 'get',
+          headers: requestHeaders,
+        });
+      } catch (err) {
+        console.log(err);
+        fileListTracker.end();
+
+        logger.log(`Failed to fetch asset list: ${err.message}`);
+        return null;
+      }
+      fileListTracker.end();
+
+      if (fileListRes.status !== 200) {
+        logger.log(
+          `API Request failed: ${fileListRes.status} ${fileListRes.statusText}`
+        );
+        logger.log(
+          `The error maybe originated from the server blocking your api access due to access region (KR/CN ip is blocked from jp)`
+        );
+        return null;
+      }
+
+      const bodyString = (await fileListRes.buffer()).toString();
+      const base64Decoded = Buffer.from(bodyString, 'base64');
+      const decodedMsgPack = await msgpack.decode(base64Decoded);
+
+      if (IS_DEVELOPMENT) {
+        await fs.promises.writeFile(
+          `${this.ROOT_PATH}/api_res_${new Date().getTime()}.json`,
+          JSON.stringify(decodedMsgPack)
+        );
+      }
+
+      if (!decodedMsgPack.data?.info) {
+        logger.log('No updates / assets to download.');
+        return null;
+      }
+
+      const {
+        data: {
+          full: fullList,
+          diff: diffList,
+          info: {
+            client_asset_version: clientVersion,
+            eventual_target_asset_version: latestVersion,
+            latest_maj_first_version: majVersion,
+          },
+        },
+        data_headers: dataHeaders,
+      } = decodedMsgPack;
+
+      const diffAssetList = diffList.reduce(
+        (acc, diff) => [...acc, ...diff.archive],
+        []
+      );
+
+      const fullAssetList = fullList?.archive || [];
+
+      const targetAssetList = [...diffAssetList];
+
+      if (!ignoreFull) {
+        targetAssetList.push(...fullAssetList);
+      }
+
+      const totalSize = Math.round(
+        targetAssetList.reduce((acc, asset) => acc + asset.size, 0) / 1024
+      );
+
+      const assetTracker = logger.progressStart({
+        id: 'Downloading assets...',
+        max: totalSize,
+      });
+
+      await Promise.all(
+        withAsyncBandwidth(targetAssetList, async (asset) => {
+          const { location, size } = asset;
+          let refinedLocation = location;
+
+          if (this.region === 'gl') {
+            refinedLocation = location.replace('{$cdnAddress}', cdn);
+          }
+          try {
+            console.log(refinedLocation);
+            const downloadedZip = await (await fetch(refinedLocation)).buffer();
+            new AdmZip(downloadedZip).extractAllTo(
+              `${this.ROOT_PATH}/dump`,
+              true
+            );
+          } catch (err) {
+            console.log(err);
+          }
+
+          assetTracker.progress(Math.round(size / 1024));
+        })
+      );
+
+      assetTracker.end();
+
+      const foundUploads = await asyncReadDir(
+        `${this.ROOT_PATH}/dump/production`
+      );
+
+      let pathCounts = 0;
+      for (const mergeablePath of foundUploads) {
+        try {
+          const foundSubPaths = await asyncReadDir(
+            `${this.ROOT_PATH}/dump/production/${mergeablePath}`
+          );
+
+          for (const mergeableSubPath of foundSubPaths) {
+            const foundAssets = await asyncReadDir(
+              `${this.ROOT_PATH}/dump/production/${mergeablePath}/${mergeableSubPath}`
+            );
+
+            pathCounts += foundAssets.length;
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      const mergeTracker = logger.progressStart({
+        id: 'Merging downloaded assets...',
+        max: pathCounts,
+      });
+
+      for (const mergeablePath of foundUploads) {
+        try {
+          const foundSubPaths = await asyncReadDir(
+            `${this.ROOT_PATH}/dump/production/${mergeablePath}`
+          );
+
+          for (const mergeableSubPath of foundSubPaths) {
+            const foundAssets = await asyncReadDir(
+              `${this.ROOT_PATH}/dump/production/${mergeablePath}/${mergeableSubPath}`
+            );
+
+            for (const foundAsset of foundAssets) {
+              mergeTracker.progress();
+              await asyncMkdir(
+                `${this.ROOT_PATH}/dump/upload/${mergeableSubPath}/`,
+                { recursive: true }
+              );
+              await asyncRename(
+                `${this.ROOT_PATH}/dump/production/${mergeablePath}/${mergeableSubPath}/${foundAsset}`,
+                `${this.ROOT_PATH}/dump/upload/${mergeableSubPath}/${foundAsset}`
+              );
+            }
+          }
+
+          await new Promise((resolve) =>
+            rimraf(`${this.ROOT_PATH}/${mergeablePath}`, resolve)
+          );
+        } catch (err) {
+          console.log(err);
+          continue;
+        }
+      }
+      try {
+        await new Promise((resolve) =>
+          rimraf(`${this.ROOT_PATH}/dump/production`, resolve)
+        );
+      } catch (err) {
+        console.log(err);
+      }
+
+      mergeTracker.end();
+
+      this.markMetaData({
+        [`${this.regionVariant}LatestApiAssetVersion`]: latestVersion,
+      });
+
+      return true;
+    } catch (err) {
+      logger.log(`Failed to fetch: ${err.message}`);
+
+      return null;
+    }
+  };
+
   development = async (debug) => {
     await this.init();
     await this.buildDigestFileMap();
@@ -1932,6 +2234,17 @@ class WfExtractor {
     this.__debug = debug;
 
     switch (true) {
+      case /fetchAssets/.test(debug): {
+        const args = debug.split(' ').slice(1);
+        await this.fetchAssetsFromApi(args[0]);
+        return null;
+      }
+      case /^character/.test(debug): {
+        const args = debug.split(' ').slice(1);
+        this.extractCharacter(args[0]);
+
+        return null;
+      }
       case /exboost/.test(debug): {
         await this.extractEXBoostMasterTable();
         return this.constructReadableExBoostOddsTable();

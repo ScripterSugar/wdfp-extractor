@@ -98,3 +98,57 @@ export const refineLs = (lsResult): Array<LSResult> => {
     })
     .filter((val) => val);
 };
+
+export const withAsyncBandwidth = (
+  array,
+  asyncMapper,
+  { bandwidth = 5 } = {}
+) => {
+  if (bandwidth < 2) throw new Error('Bandwidth must bigger than 1');
+
+  const entries = [...array];
+  const chainedResponses = new Array(bandwidth)
+    .fill()
+    .map(() => new Promise((resolve) => resolve()));
+  let iterator = 0;
+  let index = 0;
+
+  while (entries.length) {
+    const currentEntry = entries.pop();
+    const currentIndex = index;
+
+    const beforeResponse = chainedResponses[iterator];
+
+    chainedResponses[iterator] = beforeResponse.then(() =>
+      asyncMapper(currentEntry, currentIndex)
+    );
+
+    index += 1;
+    if (iterator < bandwidth - 1) {
+      iterator += 1;
+    } else {
+      iterator = 0;
+    }
+  }
+
+  return chainedResponses;
+};
+
+export const compareVersion = (prev, next) => {
+  const prevSplit = prev.split('.').map(parseFloat);
+  const nextSplit = next.split('.').map(parseFloat);
+
+  for (let majority = 0; majority < prevSplit.length; majority += 1) {
+    const prevVersion = prevSplit[majority];
+    const nextVersion = nextSplit[majority];
+
+    if (prevVersion > nextVersion || !nextVersion) {
+      return 1;
+    }
+    if (nextVersion > prevVersion) {
+      return -1;
+    }
+  }
+
+  return 0;
+};

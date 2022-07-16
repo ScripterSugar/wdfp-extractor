@@ -7,6 +7,7 @@ import sharp from 'sharp';
 import GifEncoder from 'gif-encoder';
 import getPixels from 'get-pixels';
 import path from 'path';
+import { app } from 'electron';
 import { restoreCorruptedMp3 } from './restoreMp3';
 import { openAndReadOrderedMap } from './readOrderedMap';
 import { digestWfFileName } from './digest';
@@ -19,6 +20,15 @@ const EQUIPMENT_BACKGROUNDS = {
   3: 'item_silver',
   4: 'item_gold',
   5: 'item_rainbow',
+};
+
+const RESOURCE_PATH = app.isPackaged
+  ? process.resourcesPath
+  : path.join(__dirname, '../../../');
+
+const ASSETS_PATH = path.join(RESOURCE_PATH, 'assets');
+const getAssetPath = (...paths) => {
+  return path.join(ASSETS_PATH, ...paths);
 };
 
 const IMAGE_CACHE = {};
@@ -134,10 +144,14 @@ export default class WfFileReader {
       },
     });
 
-    await writeFile(
-      `${this._rootDir}/digestFileMap.lock`,
-      JSON.stringify(this.digestFileMap)
-    );
+    if (Object.keys(this.digestFileMap).length) {
+      await writeFile(
+        `${this._rootDir}/digestFileMap.lock`,
+        JSON.stringify(this.digestFileMap)
+      );
+    } else {
+      throw new Error('EMPTY_DIGEST');
+    }
   };
 
   checkDigestPath = async (
@@ -757,25 +771,20 @@ export default class WfFileReader {
   };
 
   stringifyMasterTable = (masterTableJson) =>
-    JSON.stringify(
-      masterTableJson,
-      (k, v) => {
-        if (v instanceof Array) return JSON.stringify(v);
-        return v;
-      },
-      4
-    )
-      .replace(/"\[/g, '[')
-      .replace(/\]"/g, ']')
-      .replace(/\[\\"/g, '["')
-      .replace(/\\"\]/g, '"]')
-      .replace(/\\",\\"/g, '","')
-      .replace(/\\",\\\[/g, '","[');
+    JSON.stringify(masterTableJson, null, 4);
 
   readBootFcAndGenerateOutput = async ({ rootDir = this._rootDir } = {}) => {
-    const openedFile = fs.readFileSync(`${rootDir}/swf/scripts/boot_ffc6.as`);
+    let bootffc6;
+    let isUsingDefaultBootFFC6 = false;
 
-    const bootFfcContent = openedFile.toString('utf-8');
+    try {
+      bootffc6 = fs.readFileSync(`${rootDir}/swf/scripts/boot_ffc6.as`);
+    } catch (err) {
+      bootffc6 = fs.readFileSync(getAssetPath('/boot_ffc6.as'));
+      isUsingDefaultBootFFC6 = true;
+    }
+
+    const bootFfcContent = bootffc6.toString('utf-8');
     const pathCapturer = /(?:"path":")(.*)(?:")/g;
     const paths = Array.from(bootFfcContent.matchAll(pathCapturer)).map(
       ([, innerPath]) => innerPath
@@ -879,10 +888,12 @@ export default class WfFileReader {
 
     const filePaths = Object.keys(possibleFilePaths);
 
-    await writeFile(
-      `${this._rootDir}/filePaths.lock`,
-      JSON.stringify(filePaths)
-    );
+    if (!isUsingDefaultBootFFC6) {
+      await writeFile(
+        `${this._rootDir}/filePaths.lock`,
+        JSON.stringify(filePaths)
+      );
+    }
 
     return {
       masterTableFiles: masterTableFiles.filter((v) => v),
