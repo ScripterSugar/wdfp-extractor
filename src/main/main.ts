@@ -99,6 +99,7 @@ ipcMain.on(
     rootDir,
     {
       region,
+      skipSwfDecompile,
       skipDevicePull,
       extractMaster,
       extractCharacterImage,
@@ -163,6 +164,10 @@ ipcMain.on(
 
         if (skipDevicePull) {
           extractionPhase = 4.5;
+        }
+
+        if (skipSwfDecompile) {
+          extractionPhase = 4;
         }
 
         if (extractionPhase <= 1) {
