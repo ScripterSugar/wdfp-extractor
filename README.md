@@ -52,6 +52,8 @@ Select the directory you want to use as workspace directory. Note that your dire
 
 #### Pull Assets from API / Device / Emulator
 
+![image](https://user-images.githubusercontent.com/19164553/179390921-e370ffbd-d02b-468c-9104-df70d7bdce70.png)
+
 You need to pull raw asset files from your device/emulator or directly from wdfp api server.
 
 Click on the `Pull/Downlaod Assets` and select the asset source, region variant and start pulling the assets. Wait until the pulling process is done.
@@ -60,6 +62,8 @@ When using your device or emulator, The device must downloaded all the assets fr
 
 
 #### Extract assets
+
+![image](https://user-images.githubusercontent.com/19164553/179390928-5cc9a112-edba-4234-b33a-dd42c5ddc674.png)
 
 Once you pulled raw assets successfully, click on the `Extract Data` button and select options you want and proceed.
 
