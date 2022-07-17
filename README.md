@@ -54,7 +54,7 @@ Select the directory you want to use as workspace directory. Note that your dire
 
 You need to pull raw asset files from your device/emulator or directly from wdfp api server.
 
-Click on the Pull/Downlaod Assets and select the asset source, region variant and pull the assets. Wait until the pulling process is done.
+Click on the `Pull/Downlaod Assets` and select the asset source, region variant and pull the assets. Wait until the pulling process is done.
 
 When using your device or emulator, The device must downloaded all the assets from world flipper client.
 
