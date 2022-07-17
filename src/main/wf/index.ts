@@ -1,4 +1,4 @@
-import fs, { existsSync, mkdirSync } from 'fs';
+import fs, { existsSync, mkdirSync, readFileSync } from 'fs';
 import moment from 'moment';
 import fkill from 'fkill';
 import path from 'path';
@@ -212,6 +212,8 @@ class WfExtractor {
   customPort: string;
 
   deltaMode: boolean;
+
+  confirmedDigests = {};
 
   constructor({
     region,
@@ -770,34 +772,42 @@ class WfExtractor {
       rootDir: this.ROOT_PATH,
     });
 
-    this.filePaths = filePaths;
+    this.filePaths = [
+      ...new Set([...filePaths, ...(await this.loadDefaultFilePaths())]),
+    ];
 
     logger.log('Successfully extracted orderedMaps.');
   };
 
-  loadFilePaths = async () => {
-    if (this.filePaths) {
-      return;
-    }
+  loadDefaultFilePaths = async () =>
+    JSON.parse((await readFile(getAssetPath('/filePaths.lock'))).toString());
 
+  loadFilePaths = async () => {
+    console.log('Loading file paths...');
     try {
+      if (this.filePaths) {
+        this.filePaths = [
+          ...new Set([
+            ...this.filePaths,
+            ...(await this.loadDefaultFilePaths()),
+          ]),
+        ];
+        return;
+      }
       const loadedFilePaths = JSON.parse(
         (await readFile(`${this.ROOT_PATH}/filePaths.lock`)).toString()
       );
-      this.filePaths = loadedFilePaths;
+      this.filePaths = [
+        ...new Set([...loadedFilePaths, await this.loadDefaultFilePaths()]),
+      ];
     } catch (err) {
+      this.filePaths = await this.loadDefaultFilePaths();
       console.log(err);
     }
-
-    if (!this.filePaths?.length) {
-      logger.log(
-        'ERR: File paths not found... Using default file path list (SOME ASSETS MAY OMITTED DUE TO OUTDATED FILE PATH LIST)'
-      );
-      this.filePaths = JSON.parse(
-        (await readFile(getAssetPath('/filePaths.lock'))).toString()
-      );
-    }
   };
+
+  loadDefaultAsFilePaths = async () =>
+    JSON.parse((await readFile(getAssetPath('/asFilePaths.lock'))).toString());
 
   loadAsFilePaths = async () => {
     if (this.asFilePaths) {
@@ -808,15 +818,18 @@ class WfExtractor {
       const loadedAsFilePaths = JSON.parse(
         (await readFile(`${this.ROOT_PATH}/asFilePaths.lock`)).toString()
       );
-      this.asFilePaths = loadedAsFilePaths || [];
+      this.asFilePaths = [
+        ...new Set([
+          ...(loadedAsFilePaths || []),
+          ...(await this.loadDefaultAsFilePaths()),
+        ]),
+      ];
     } catch (err) {
       console.log(err);
     }
 
     if (!this.asFilePaths?.length) {
-      this.asFilePaths = JSON.parse(
-        (await readFile(getAssetPath('/asFilePaths.lock'))).toString()
-      );
+      this.asFilePaths = await this.loadDefaultAsFilePaths();
     }
   };
 
@@ -1224,7 +1237,6 @@ class WfExtractor {
       try {
         await this.animateCharacterSprite(character);
       } catch (err) {
-        console.log(err);
         continue;
       } finally {
         tracker.progress();
@@ -1259,15 +1271,22 @@ class WfExtractor {
         foundAsFiles
       );
 
-      this.asFilePaths = asFilePaths || [];
+      this.asFilePaths = [
+        new Set([
+          ...(asFilePaths || []),
+          ...(await this.loadDefaultAsFilePaths()),
+        ]),
+      ];
 
       await writeFile(
         `${this.ROOT_PATH}/asFilePaths.lock`,
-        JSON.stringify(asFilePaths)
+        JSON.stringify(this.asFilePaths)
       );
     } catch (err) {
       console.log(err);
       logger.log('Failed to search script files.');
+
+      this.asFilePaths = await this.loadDefaultAsFilePaths();
     }
   };
 
@@ -1276,6 +1295,7 @@ class WfExtractor {
     const digestPath = await this.fileReader.checkDigestPath(digest);
 
     if (digestPath) {
+      this.confirmedDigests[digest] = filePath;
       return [filePath, digestPath];
     }
 
@@ -1339,6 +1359,7 @@ class WfExtractor {
         )
       );
     }
+
     await this.developWriteJson('image_assets.json', possibleImageAssets);
 
     const amf3Tracker = logger.progressStart({
@@ -2251,6 +2272,28 @@ class WfExtractor {
     }
   };
 
+  saveConfirmedDigests = async (rootPath = this.ROOT_PATH) => {
+    let loadedConfirmedDigests = {};
+
+    try {
+      loadedConfirmedDigests = this.loadConfirmedDigests(rootPath);
+    } catch (err) {
+      console.log(err);
+    }
+
+    await fs.promises.writeFile(
+      `${rootPath}/confirmedDigests.lock`,
+      JSON.stringify({ ...loadedConfirmedDigests, ...this.confirmedDigests })
+    );
+  };
+
+  loadConfirmedDigests = async (rootPath = this.ROOT_PATH) => {
+    const confirmedDigestString = readFileSync(
+      `${rootPath}/confirmedDigests.lock`
+    ).toString();
+    return JSON.parse(confirmedDigestString);
+  };
+
   development = async (debug) => {
     await this.init();
     await this.buildDigestFileMap();
@@ -2265,6 +2308,84 @@ class WfExtractor {
       case /fetchAssets/.test(debug): {
         const args = debug.split(' ').slice(1);
         await this.fetchAssetsFromApi(args[0]);
+        return null;
+      }
+      case /^checkUnknowns/.test(debug): {
+        const args = debug.split(' ').slice(1);
+
+        let targetDelta;
+
+        args.forEach((arg, idx) => {
+          if (/^-delta$/.test(arg)) {
+            targetDelta = args[idx + 1];
+          }
+        });
+
+        const rootDir = `${this.ROOT_PATH}${
+          (targetDelta && `/delta-${targetDelta}`) || ''
+        }`;
+
+        const targetDirectory = `${rootDir}/dump`;
+
+        const savedDigests = await this.loadConfirmedDigests(rootDir);
+
+        const unknownAssets = [];
+        let total = 0;
+
+        const targetUploads = await asyncReadDir(targetDirectory);
+
+        for (const targetUpload of targetUploads) {
+          try {
+            const targetSubPaths = await asyncReadDir(
+              `${targetDirectory}/${targetUpload}`
+            );
+
+            for (const targetSubPath of targetSubPaths) {
+              const targetAssets = await asyncReadDir(
+                `${targetDirectory}/${targetUpload}/${targetSubPath}`
+              );
+
+              for (const targetAsset of targetAssets) {
+                total += 1;
+                if (!savedDigests[`${targetSubPath}${targetAsset}`]) {
+                  unknownAssets.push([
+                    `${targetDirectory}/${targetUpload}/${targetSubPath}/${targetAsset}`,
+                    `${targetSubPath}${targetAsset}`,
+                  ]);
+                }
+              }
+            }
+          } catch (err) {
+            continue;
+          }
+        }
+
+        const unknownTracker = logger.progressStart({
+          id: 'Checking unknown asset files...',
+          max: unknownAssets.length,
+        });
+
+        let unknownImages = 0;
+
+        for (const unknownAsset of unknownAssets) {
+          unknownTracker.progress();
+          try {
+            await this.fileReader.readPngAndGenerateOutput(
+              unknownAsset[0],
+              `unknown/images/${unknownAsset[1]}.png`,
+              { rootDir }
+            );
+            unknownImages += 1;
+          } catch (err) {
+            continue;
+          }
+        }
+        unknownTracker.end();
+
+        logger.log(
+          `Saved ${unknownImages} unknown images, out of total ${unknownAssets.length} unknowns (Total delta files: ${total})`
+        );
+
         return null;
       }
       case /^character/.test(debug): {

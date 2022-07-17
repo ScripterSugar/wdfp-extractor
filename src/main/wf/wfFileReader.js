@@ -728,9 +728,11 @@ export default class WfFileReader {
   readMasterTableAndGenerateOutput = async (
     filePath,
     savePath,
-    { rootDir = this._rootDir } = {}
+    { rootDir = this._rootDir, readOnly } = {}
   ) => {
     const masterTableContent = await openAndReadOrderedMap(filePath);
+
+    if (readOnly) return masterTableContent;
 
     await writeFileRecursive(
       `${rootDir}/output/orderedmap/${savePath
