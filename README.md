@@ -16,6 +16,12 @@ Check out the [release page of this repo](https://github.com/ScripterSugar/wdfp-
 
 Currently only supports Windows (recommended 10 or higher)
 
+#### Pulling from API
+
+Some regions may not be able to call asset download api (For example, KR/CN Ips are banned from JP api server.) If you have trouble pulling assets from API, consider using VPN to call those APIs 
+
+#### Pulling from devices/emulator
+
 Requires [Java 8 or later](https://www.java.com/en/download/) to run FFDEC.
 
 if you're willing to extract assets from real device, your device must be rooted.
@@ -26,18 +32,36 @@ The tool only tested for limited use cases, thus should have various bugs or eve
 
 To use this tool, your device should at least have file-listing access to the /data directory.
 
-### Emulator
+#### General environmental concerns
+
+The tool isnt greatly optimized performance-wise, so your machine's cpu/ram usage may reach very high load while extraction. 
+
+#### Using Emulator
 - Nox player (version 7.0.x) - **Recommended (Global)**
 - Bluestacks 5 (Not recommended - bad performance due to unabled adbd root access.)
 
-### Real device
+#### Using Real device
 - Pixel 2 (Android 11)
 - Pixel 4 XL (Android 12)
 
 ## Usage
-![wdfp](https://user-images.githubusercontent.com/19164553/149924519-91e016e3-5ac7-4d97-a8f3-c7c833f79e76.gif)
 
-Simply just connect your device(The device must downloaded all the assets from world flipper client.), select the directory you want to save your assets, and click on the Extract Data button.
+#### Select workspace directory
+
+Select the directory you want to use as workspace directory. Note that your directory must only includes english and dash. I recommend you to use root directory in the disk such as `C:/wafuriextract`
+
+#### Pull Asset from API / Device / Emulator
+
+You need to pull raw asset files from your device/emulator or directly from wdfp api server.
+
+Click on the Pull/Downlaod Assets and select the asset source, region variant and pull the assets. Wait until the pulling process is done.
+
+When using your device or emulator, The device must downloaded all the assets from world flipper client.
+
+
+#### Extract assets
+
+Once you pulled raw assets successfully, click on the `Extract Data` button and select options you want and proceed.
 
 Once the extraction is done, you can find inflated asset files located in the output directory under your extraction directory.
 
