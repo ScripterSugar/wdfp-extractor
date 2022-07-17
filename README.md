@@ -50,7 +50,7 @@ The tool isnt greatly optimized performance-wise, so your machine's cpu/ram usag
 
 Select the directory you want to use as workspace directory. Note that your directory must only includes english and dash. I recommend you to use root directory in the disk such as `C:/wafuriextract`
 
-#### Pull Asset from API / Device / Emulator
+#### Pull Assets from API / Device / Emulator
 
 You need to pull raw asset files from your device/emulator or directly from wdfp api server.
 
