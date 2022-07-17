@@ -88,7 +88,6 @@ Once the extraction is done, you can find inflated asset files located in the ou
 The library is open to your contribution! if you're having problem with the issues that listed here, feel free to open PRs to resolve it and make other pepople can benefit from your contribution.
 
 - Whitespaces in Windows user name / extraction directory path causing crashes on extraction process. (Due date: TBD)
-- String datas with nested quotation marks or backslashes causing JSON files to be in invalid format. (Due date: TBD)
 
 ## Contributing
 
