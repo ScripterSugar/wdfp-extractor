@@ -1,18 +1,31 @@
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import settingsIcon from '../../assets/settings.svg';
 import extractIcon from '../../assets/extract.svg';
 import viewerIcon from '../../assets/viewer.svg';
 import trashIcon from '../../assets/trash.svg';
+import deltaIcon from '../../assets/delta.png';
 import folderIcon from '../../assets/folder.svg';
-import theoSpin from '../../assets/theospin.png';
-import theoSpecial from '../../assets/theoSpecial.gif';
 import discord from '../../assets/discord.svg';
+import github from '../../assets/github.png';
 import infoIcon from '../../assets/info.svg';
-import theoWalk from '../../assets/theoWalk.gif';
 import arrowLeftIcon from '../../assets/arrowLeft.svg';
-import theoBackground from '../../assets/backgrounds/beast_event.jpg';
+import theoBackground from '../../assets/images/theo.jpg';
+import theoBanner from '../../assets/images/theo_banner.png';
+import theoSpin from '../../assets/images/theo_spin.png';
+import theoSpecial from '../../assets/images/theo_special.gif';
+import theoWalk from '../../assets/images/theo_walk.gif';
+import ch10Background from '../../assets/images/ch10.jpg';
+import ch10Banner from '../../assets/images/ch10_banner.png';
+import ch10Spin from '../../assets/images/ch10_spin.png';
+import ch10Special from '../../assets/images/ch10_special.gif';
+import ch10Walk from '../../assets/images/ch10_walk.gif';
+import couetteBackground from '../../assets/images/couette.jpg';
+import couetteBanner from '../../assets/images/couette_banner.png';
+import couetteSpin from '../../assets/images/couette_spin.png';
+import couetteSpecial from '../../assets/images/couette_special.gif';
+import couetteWalk from '../../assets/images/couette_walk.gif';
 import './App.css';
 import WfCard from './components/WfCard';
 import WfButton, {
@@ -25,6 +38,53 @@ import Typography, { IndicatorTypo } from './components/Typography';
 import Modal from './components/Modal';
 import Switch from './components/Switch';
 import TextField from './components/TextField';
+
+const APP_THEMES = ['theo', 'couette', 'ch10'];
+const THEME_SOURCEMAP = {
+  theo: {
+    bg: theoBackground,
+    banner: theoBanner,
+    special: theoSpecial,
+    spin: theoSpin,
+    walk: theoWalk,
+  },
+  ch10: {
+    bg: ch10Background,
+    banner: ch10Banner,
+    special: ch10Special,
+    spin: ch10Spin,
+    walk: ch10Walk,
+  },
+  couette: {
+    bg: couetteBackground,
+    banner: couetteBanner,
+    special: couetteSpecial,
+    spin: couetteSpin,
+    walk: couetteWalk,
+  },
+};
+
+const PRESET_FAST = {
+  extractMaster: true,
+  parseActionScript: false,
+  extractCharacterImage: true,
+  processAtlas: false,
+  extractGeneralAmf: true,
+  processAtlasMisc: false,
+  extractAudio: true,
+  extractMiscImage: true,
+};
+
+const PRESET_FULL = {
+  extractMaster: true,
+  parseActionScript: true,
+  extractCharacterImage: true,
+  processAtlas: true,
+  extractGeneralAmf: true,
+  processAtlasMisc: true,
+  extractAudio: true,
+  extractMiscImage: true,
+};
 
 const AppMainLayout = styled.div`
   display: flex;
@@ -189,14 +249,20 @@ const CommandWrapper = styled.div`
 
 const Progress = ({
   progress,
+  appTheme,
 }: {
   progress: { id: string; max: number; progress: number };
+  appTheme: string;
 }) => {
   return (
     <ProgressWrapper>
       <div>
         <Typography>
-          <img src={theoWalk} alt="loading" style={{ marginRight: 8 }} />
+          <img
+            src={THEME_SOURCEMAP[appTheme].walk}
+            alt="loading"
+            style={{ marginRight: 8 }}
+          />
           {progress.id}
         </Typography>
         <Typography>
@@ -217,10 +283,13 @@ const Progress = ({
 
 const AppContent = () => {
   const [targetDir, setTargetDir] = usePermanentState(null, 'TARGET_DIR');
+  const [appTheme, setAppTheme] = usePermanentState(APP_THEMES[0], 'APP_THEME');
   const [showDevConsole, setShowDevConsole] = useState(
     process.env.NODE_ENV === 'development'
   );
-  const [latestCommandInput, setLatestCommandInput] = usePermanentState(
+  const [inputHistoryIndex, setInputHistoryIndex] = useState(-1);
+  const [deltaMode, setDeltaMode] = useState(false);
+  const [commandInputHIstory, setCommandInputHistory] = usePermanentState(
     '',
     'LATEST_COMMAND_INPUT'
   );
@@ -317,6 +386,10 @@ const AppContent = () => {
   const [openSelectPullOption, setOpenSelectPullOption] = useState(false);
   const devLogRef = useRef();
   const [progresses, setProgresses] = useState([]);
+
+  const changeAppTheme = () => {
+    setAppTheme(APP_THEMES[APP_THEMES.indexOf(appTheme) + 1] || APP_THEMES[0]);
+  };
 
   const onChangeOptions = (key, value) =>
     setOptions({ ...options, [key]: value });
@@ -577,6 +650,7 @@ const AppContent = () => {
         window.electron.ipcRenderer.startExtraction(targetDir, {
           ...options,
           debug: options.isDebug && options.debug,
+          deltaMode: deltaMode && meta.latestPullStamp,
         });
       }
 
@@ -598,6 +672,8 @@ const AppContent = () => {
       setDevConsoleLogs,
       targetDir,
       responseExtraction,
+      deltaMode,
+      meta,
     ]
   );
 
@@ -621,6 +697,7 @@ const AppContent = () => {
     }
     window.electron.ipcRenderer.startPull(targetDir, {
       ...pullOptions,
+      deltaMode: deltaMode && 'latest',
       region:
         (['en', 'kr'].includes(pullOptions.regionVariant) && 'gl') || 'jp',
     });
@@ -642,6 +719,7 @@ const AppContent = () => {
     setDevConsoleLogs,
     targetDir,
     responseExtraction,
+    deltaMode,
   ]);
 
   const openTargetDir = () => {
@@ -707,8 +785,33 @@ const AppContent = () => {
     window.electron.ipcRenderer.updateApp();
   };
 
-  const loadLatestCommand = () => {
-    setCommandInput(latestCommandInput);
+  const loadPrevCommand = () => {
+    const prevCommand = commandInputHIstory.split(',')[inputHistoryIndex + 1];
+    if (!prevCommand) return null;
+    setCommandInput(prevCommand);
+
+    setInputHistoryIndex(inputHistoryIndex + 1);
+  };
+  const loadNextCommand = () => {
+    if (!inputHistoryIndex) {
+      setCommandInput('');
+      return setInputHistoryIndex(-1);
+    }
+    setCommandInput(commandInputHIstory.split(',')[inputHistoryIndex - 1]);
+
+    setInputHistoryIndex(inputHistoryIndex - 1);
+  };
+
+  const saveCommand = () => {
+    const splitHistories = commandInputHIstory.split(',');
+
+    splitHistories.unshift(commandInput);
+
+    if (splitHistories.length > 100) {
+      splitHistories.pop();
+    }
+
+    setCommandInputHistory(splitHistories.join(','));
   };
 
   const clearMeta = (targetData) => {
@@ -720,22 +823,54 @@ const AppContent = () => {
 
   const excuteCommand = () => {
     if (!commandInput) return;
-    setLatestCommandInput(commandInput);
+    saveCommand();
     setCommandInput('');
+    setInputHistoryIndex(-1);
 
     setTimeout(() => startExtraction(commandInput), 1);
   };
+
+  const selectedPreset = useMemo(() => {
+    if (
+      !Object.keys(PRESET_FAST).filter(
+        (key) => PRESET_FAST[key] !== options[key]
+      ).length
+    ) {
+      return 'fast';
+    }
+    if (
+      !Object.keys(PRESET_FULL).filter(
+        (key) => PRESET_FULL[key] !== options[key]
+      ).length
+    ) {
+      return 'full';
+    }
+    return null;
+  }, [options]);
+
+  const isDeltaExtractionAvailable = useMemo(() => {
+    return meta.latestPullStamp && meta.deltaAvailable;
+  }, [meta]);
 
   return (
     <div
       id="app-main"
       style={{
-        background: `url(${theoBackground})`,
+        backgroundImage: `url(${THEME_SOURCEMAP[appTheme].bg})`,
         backgroundSize: 'cover',
       }}
     >
       <AppMainLayout>
-        <WfCard style={{ width: '50%', height: '100%' }}>
+        <WfCard
+          style={{
+            width: '50%',
+            height: '100%',
+            ...(deltaMode && {
+              border: '6px solid #50e99b',
+              padding: 18,
+            }),
+          }}
+        >
           <WfButton
             disabled={!targetDir || isExtracting}
             onClick={
@@ -747,25 +882,63 @@ const AppContent = () => {
             <img src={extractIcon} alt="extract" width={24} />
             Pull/Download Assets
           </WfButton>
-          <WfButton
-            disabled={!targetDir || isExtracting}
-            onClick={
-              targetDir && !isExtracting
-                ? () => setOpenSelectOption(true)
-                : () => {}
-            }
-          >
-            <img src={viewerIcon} alt="viewer" width={24} />
-            Extract Data
-            {isExtracting && (
-              <SpinImg
-                src={theoSpin}
-                style={{ marginLeft: 8 }}
-                alt="info"
-                width={24}
+          <LayoutFlex style={{ marginTop: 16, marginBottom: 16 }}>
+            <WfButton
+              style={{ flexGrow: 1 }}
+              disabled={
+                !targetDir ||
+                isExtracting ||
+                (deltaMode && !isDeltaExtractionAvailable)
+              }
+              onClick={
+                targetDir && !isExtracting
+                  ? () => setOpenSelectOption(true)
+                  : () => {}
+              }
+            >
+              <img src={viewerIcon} alt="viewer" width={24} />
+              Extract Data
+              {isExtracting && (
+                <SpinImg
+                  src={THEME_SOURCEMAP[appTheme].spin}
+                  style={{ marginLeft: 8 }}
+                  alt="info"
+                  width={24}
+                />
+              )}
+            </WfButton>
+            <WfButton
+              style={{
+                flexGrow: 0,
+                flexShrink: 0,
+                width: 64,
+                marginLeft: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                border: deltaMode && '6px solid #50e99b',
+              }}
+              disabled={
+                !meta.jpLatestApiAssetVersion &&
+                !meta.krLatestApiAssetVersion &&
+                !meta.enLatestApiAssetVersion
+              }
+              onClick={() => {
+                if (!deltaMode) {
+                  setPullOptions({ ...pullOptions, variant: 'api' });
+                }
+                setDeltaMode(!deltaMode);
+              }}
+            >
+              <img
+                style={{ margin: 0 }}
+                src={deltaIcon}
+                alt="trash"
+                width={32}
               />
-            )}
-          </WfButton>
+            </WfButton>
+          </LayoutFlex>
           <WfButton
             disabled={!targetDir}
             onClick={targetDir ? openTargetDir : () => {}}
@@ -805,6 +978,13 @@ const AppContent = () => {
               {targetDir?.replace(/\\/g, '/') || 'N/A'}
             </Typography>
           </div>
+          {deltaMode && (
+            <div>
+              <Typography style={{ width: '100%' }}>
+                Delta extraction mode
+              </Typography>
+            </div>
+          )}
           <div style={{ flexGrow: 1 }} />
           <WfButton onClick={() => setOpenInfoModal(true)}>
             <img src={infoIcon} alt="info" width={24} />
@@ -848,7 +1028,11 @@ const AppContent = () => {
                 <p>{log}</p>
               ))}
               {progresses.map((progress) => (
-                <Progress key={progress.id} progress={progress} />
+                <Progress
+                  key={progress.id}
+                  progress={progress}
+                  appTheme={appTheme}
+                />
               ))}
             </DevConsoleInner>
             <CommandWrapper>
@@ -857,16 +1041,20 @@ const AppContent = () => {
                 disabled={isExtracting}
                 onChange={(event) => setCommandInput(event.target.value)}
                 onEnter={excuteCommand}
-                onArrowUp={loadLatestCommand}
-                onArrowDown={() => setCommandInput('')}
+                onArrowUp={loadPrevCommand}
+                onArrowDown={loadNextCommand}
               />
             </CommandWrapper>
           </WfCard>
         )}
       </AppMainLayout>
-      <Modal open={openInfoModal} onClose={() => setOpenInfoModal(false)}>
+      <Modal
+        open={openInfoModal}
+        style={{ height: 600 }}
+        onClose={() => setOpenInfoModal(false)}
+      >
         <img
-          src={theoSpecial}
+          src={THEME_SOURCEMAP[appTheme].special}
           onClick={() => {
             onChangeOptions('isDebug', !options.isDebug);
             window.electron.ipcRenderer.openDevTools();
@@ -874,6 +1062,7 @@ const AppContent = () => {
           alt="theo"
           style={{ width: '100%', marginBottom: 16 }}
         />
+        <div style={{ flexGrow: 1 }} />
         <Typography>World Flipper Data Extractor</Typography>
         <br />
         <Typography
@@ -906,6 +1095,16 @@ const AppContent = () => {
         <br />
         <WfButton
           style={{
+            backgroundImage: `url(${THEME_SOURCEMAP[appTheme].banner})`,
+            backgroundSize: 'cover',
+            justifyContent: 'center',
+            height: 48,
+            marginTop: 16,
+          }}
+          onClick={changeAppTheme}
+        />
+        <WfButton
+          style={{
             background: '#5865F2',
             justifyContent: 'center',
             height: 48,
@@ -918,6 +1117,21 @@ const AppContent = () => {
           }
         >
           <img src={discord} alt="discord" style={{ width: 32, margin: 0 }} />
+        </WfButton>
+        <WfButton
+          style={{
+            background: 'black',
+            justifyContent: 'center',
+            height: 48,
+            marginTop: 16,
+          }}
+          onClick={() =>
+            window.electron.ipcRenderer.openExternal(
+              'https://github.com/ScripterSugar/wdfp-extractor'
+            )
+          }
+        >
+          <img src={github} alt="github" style={{ width: 32, margin: 0 }} />
         </WfButton>
       </Modal>
       <Modal
@@ -940,7 +1154,10 @@ const AppContent = () => {
               />
             </LayoutFlexSpaceBetween>
             <LayoutFlexSpaceBetween>
-              <Typography>Search ActionScripts for assets</Typography>
+              <LayoutFlexColumn>
+                <Typography>Search ActionScripts for assets</Typography>
+                <IndicatorTypo>Requires SWF decompilation</IndicatorTypo>
+              </LayoutFlexColumn>
               <Switch
                 data-disabled={!options.extractMaster}
                 value={options.parseActionScript}
@@ -1082,6 +1299,43 @@ const AppContent = () => {
             </LayoutFlexSpaceBetween>
           )}
         </LayoutFlexColumn>
+        <IndicatorTypo style={{ marginTop: 16, marginLeft: 4 }}>
+          Option preset
+        </IndicatorTypo>
+        <ModalActions style={{ marginTop: 8 }}>
+          <LayoutFlexColumn style={{ width: '100%' }}>
+            <WfSelectButton
+              data-selected={selectedPreset === 'fast'}
+              onClick={() => {
+                setOptions({
+                  ...options,
+                  ...PRESET_FAST,
+                });
+              }}
+            >
+              Fast
+            </WfSelectButton>
+            <IndicatorTypo style={{ marginTop: 8 }}>
+              Run time (full asset): ~10min
+            </IndicatorTypo>
+          </LayoutFlexColumn>
+          <LayoutFlexColumn style={{ width: '100%' }}>
+            <WfSelectButton
+              data-selected={selectedPreset === 'full'}
+              onClick={() => {
+                setOptions({
+                  ...options,
+                  ...PRESET_FULL,
+                });
+              }}
+            >
+              Full
+            </WfSelectButton>
+            <IndicatorTypo style={{ marginTop: 8 }}>
+              Run time (full asset): 1hr+ for initial extraction
+            </IndicatorTypo>
+          </LayoutFlexColumn>
+        </ModalActions>
         <ModalActions style={{ marginTop: 48 }}>
           <WfDangerButton
             style={{ width: 160 }}
@@ -1095,19 +1349,20 @@ const AppContent = () => {
         </ModalActions>
       </Modal>
       <Modal
-        style={{ width: 720 }}
+        style={{ width: 720, height: 500 }}
         open={!!openSelectPullOption}
         onClose={() => {}}
       >
-        <IndicatorTypo style={{ marginTop: 16, marginLeft: 4 }}>
+        <IndicatorTypo style={{ marginLeft: 4 }}>
           Pull assets from
         </IndicatorTypo>
         <ModalActions style={{ marginTop: 8 }}>
           <WfSelectButton
             data-selected={pullOptions.variant === 'device'}
+            disabled={deltaMode}
             onClick={() => onChangePullOptions('variant', 'device')}
           >
-            Device/Emulator
+            {(deltaMode && 'Deltamode not supported') || 'From Device/Emulator'}
           </WfSelectButton>
           <WfSelectButton
             data-selected={pullOptions.variant === 'api'}
@@ -1121,11 +1376,12 @@ const AppContent = () => {
             <LayoutFlexDivideHalf>
               <LayoutFlexSpaceBetween>
                 <LayoutFlexColumn>
-                  <Typography>Download delta(diff) only</Typography>
-                  <IndicatorTypo>Ignore full asset download</IndicatorTypo>
+                  <Typography>Ignore full asset download</Typography>
+                  <IndicatorTypo>Will only fetch diff data</IndicatorTypo>
                 </LayoutFlexColumn>
                 <Switch
                   value={pullOptions.ignoreFull}
+                  data-disabled={deltaMode}
                   onClick={() =>
                     onChangePullOptions('ignoreFull', !pullOptions.ignoreFull)
                   }
@@ -1230,6 +1486,7 @@ const AppContent = () => {
             </LayoutFlexDivideHalf>
           </LayoutFlexColumn>
         )}
+        <div style={{ flexGrow: 1 }} />
         <IndicatorTypo style={{ marginTop: 16, marginLeft: 4 }}>
           Target region (version)
         </IndicatorTypo>
@@ -1250,7 +1507,7 @@ const AppContent = () => {
             data-selected={pullOptions.regionVariant === 'jp'}
             onClick={() => onChangePullOptions('regionVariant', 'jp')}
           >
-            Japan
+            JP
           </WfSelectButton>
         </ModalActions>
         <ModalActions style={{ marginTop: 48 }}>

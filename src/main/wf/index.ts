@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs, { existsSync, mkdirSync } from 'fs';
 import moment from 'moment';
 import fkill from 'fkill';
 import path from 'path';
@@ -67,7 +67,7 @@ const createAndCacheDirectory = async (dir) => {
   DIR_CACHE[dir] = true;
 };
 
-const DEFAULT_ROOT_PATH = 'D:/wfextract';
+const DEFAULT_ROOT_PATH = 'C:/wfextract';
 const ADB_PATH = getAssetPath(`/adb/adb.exe`);
 const METADATA_PATH = (rootPath) => `${rootPath}/metadata.json`;
 
@@ -186,6 +186,8 @@ class WfExtractor {
 
   deltaFiles: any[];
 
+  ORIGIN_ROOT_PATH: string;
+
   ROOT_PATH: string;
 
   DEVICE_ID: string;
@@ -209,6 +211,8 @@ class WfExtractor {
 
   customPort: string;
 
+  deltaMode: boolean;
+
   constructor({
     region,
     rootDir,
@@ -216,16 +220,32 @@ class WfExtractor {
     swfMode,
     extractAllFrames,
     regionVariant,
+    deltaMode,
   }: { swfMode: 'simple' | 'full' } = {}) {
     this.metadata = {};
     this.swfMode = swfMode || 'simple';
     this.customPort = customPort;
+    this.deltaMode = deltaMode;
 
     this.options = {
       extractAllFrames,
     };
 
-    this.setRootPath(rootDir || DEFAULT_ROOT_PATH);
+    this.ORIGIN_ROOT_PATH = rootDir;
+
+    let refinedRootDir = rootDir;
+
+    if (deltaMode) {
+      const deltaPath = `${rootDir}/delta-${deltaMode}`;
+      if (deltaMode === 'latest') {
+        mkdirSync(deltaPath, { recursive: true });
+      } else if (!existsSync(deltaPath)) {
+        fs.renameSync(`${rootDir}/delta-latest`, deltaPath);
+      }
+      refinedRootDir = deltaPath;
+    }
+
+    this.setRootPath(refinedRootDir || DEFAULT_ROOT_PATH);
     if (region) {
       logger.log(`Target region set as ${region}`);
     }
@@ -245,14 +265,17 @@ class WfExtractor {
     this.fileReader = new WfFileReader({ rootDir: this.ROOT_PATH });
   };
 
-  markMetaData = (update: WFExtractorMetaData) => {
+  markMetaData = (
+    update: WFExtractorMetaData,
+    { ignoreDeltaMode = false } = {}
+  ) => {
     this.metadata = {
       ...this.metadata,
       ...update,
     };
 
     fs.writeFile(
-      METADATA_PATH(this.ROOT_PATH),
+      METADATA_PATH(ignoreDeltaMode ? this.ORIGIN_ROOT_PATH : this.ROOT_PATH),
       JSON.stringify(this.metadata),
       () => {}
     );
@@ -2211,9 +2234,14 @@ class WfExtractor {
 
       mergeTracker.end();
 
-      this.markMetaData({
-        [`${this.regionVariant}LatestApiAssetVersion`]: latestVersion,
-      });
+      this.markMetaData(
+        {
+          [`${this.regionVariant}LatestApiAssetVersion`]: latestVersion,
+          latestPullStamp: latestVersion,
+          deltaAvailable: !!this.deltaMode,
+        },
+        { ignoreDeltaMode: true }
+      );
 
       return true;
     } catch (err) {
@@ -2270,6 +2298,59 @@ class WfExtractor {
 
         if (!characters.includes(character)) {
           return logger.log(`Character ${character} not found.`);
+        }
+        const foundPng = await this.digestAndCheckFilePath(
+          `character/${character}/pixelart/sprite_sheet.png`
+        );
+        if (!foundPng) {
+          logger.log('Image not found.');
+          return null;
+        }
+        const foundAtlas = await this.digestAndCheckFilePath(
+          `character/${character}/pixelart/sprite_sheet.atlas.amf3.deflate`
+        );
+        const foundTimeline = await this.digestAndCheckFilePath(
+          `character/${character}/pixelart/pixelart.timeline.amf3.deflate`
+        );
+        const foundSpecialPng = await this.digestAndCheckFilePath(
+          `character/${character}/pixelart/special_sprite_sheet.png`
+        );
+        const foundSpecialAtlas = await this.digestAndCheckFilePath(
+          `character/${character}/pixelart/special_sprite_sheet.atlas.amf3.deflate`
+        );
+        const foundSpecialTimeline = await this.digestAndCheckFilePath(
+          `character/${character}/pixelart/special.timeline.amf3.deflate`
+        );
+        if (!foundAtlas) {
+          logger.log('Atlas not found.');
+          return null;
+        }
+
+        await this.fileReader.readPngAndGenerateOutput(
+          foundPng[1],
+          foundPng[0]
+        );
+        await this.fileReader.readGeneralAndCreateOutput(
+          foundAtlas[1],
+          foundAtlas[0]
+        );
+        await this.fileReader.readGeneralAndCreateOutput(
+          foundTimeline[1],
+          foundTimeline[0]
+        );
+        if (foundSpecialPng) {
+          await this.fileReader.readPngAndGenerateOutput(
+            foundSpecialPng[1],
+            foundSpecialPng[0]
+          );
+          await this.fileReader.readGeneralAndCreateOutput(
+            foundSpecialAtlas[1],
+            foundSpecialAtlas[0]
+          );
+          await this.fileReader.readGeneralAndCreateOutput(
+            foundSpecialTimeline[1],
+            foundSpecialTimeline[0]
+          );
         }
 
         return this.animateCharacterSprite(character, { ignoreCache: true });

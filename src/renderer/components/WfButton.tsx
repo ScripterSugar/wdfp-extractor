@@ -30,12 +30,13 @@ const WfButton = styled.button`
 
   &:disabled {
     cursor: initial;
+    background: #efefef;
     &:hover {
-      background: white;
+      background: #efefef;
       transform: scale(1);
     }
     &:active {
-      background: white;
+      background: #efefef;
     }
   }
 `;

@@ -383,26 +383,18 @@ export default class WfFileReader {
   };
 
   buildSpriteBackgrounds = async (scale) => {
-    const frameFile = await readFile(
-      `${this._rootDir}/output/assets/scene/general/sprite_sheet/thumbnail-assets/ability_soul_thumbnail_inner_frame.png`
-    );
-
-    const frame = await sharp(frameFile)
-      .resize({
-        width: 24 * scale,
-        height: 24 * scale,
-        fit: 'inside',
-        kernel: 'nearest',
-      })
-      .toBuffer();
-
-    IMAGE_CACHE.ability_soul_thumbnail_inner_frame = frame;
     await Promise.all(
       Object.entries(EQUIPMENT_BACKGROUNDS).map(
         async ([rarity, backgroundId]) => {
-          const bgFile = await readFile(
-            `${this._rootDir}/output/assets/scene/general/sprite_sheet/thumbnail-assets/${backgroundId}.png`
-          );
+          let bgFile;
+
+          try {
+            bgFile = await readFile(
+              `${this._rootDir}/output/assets/scene/general/sprite_sheet/thumbnail-assets/${backgroundId}.png`
+            );
+          } catch (err) {
+            bgFile = await readFile(getAssetPath(`/${backgroundId}.png`));
+          }
 
           const bg = await sharp(bgFile)
             .resize({
@@ -413,25 +405,6 @@ export default class WfFileReader {
             })
             .toBuffer();
           IMAGE_CACHE[backgroundId] = bg;
-
-          const resizedFrame = await sharp(frame)
-            .resize({
-              width: 24 * scale + 2 * scale,
-              height: 24 * scale + 2 * scale,
-              fit: 'inside',
-              kernel: 'nearest',
-            })
-            .toBuffer();
-
-          await sharp(bg)
-            .extend({
-              top: 1 * scale,
-              bottom: 1 * scale,
-              right: 1 * scale,
-              left: 1 * scale,
-            })
-            .composite([{ input: resizedFrame, gravity: 'center' }])
-            .toFile(`${this._rootDir}/output/assets/item/rarity_${rarity}.png`);
 
           return true;
         }
@@ -564,7 +537,6 @@ export default class WfFileReader {
             const backgroundId = EQUIPMENT_BACKGROUNDS[rarity];
             saveName = `${itemId}${(isSoul && '_soul') || ''}.png`;
             const background = IMAGE_CACHE[backgroundId];
-            const soulFrame = IMAGE_CACHE.ability_soul_thumbnail_inner_frame;
 
             if (isSoul) {
               imageBuffer = await sharp({

@@ -20,4 +20,6 @@ export type WFExtractorMetaData = {
   spriteProcessedLock: string[];
   specialSpriteProcessedLock: string[];
   lockedHashMap: boolean;
+  latestPullStamp: string;
+  deltaAvailable: boolean;
 };

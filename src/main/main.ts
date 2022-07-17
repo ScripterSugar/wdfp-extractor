@@ -119,6 +119,7 @@ ipcMain.on(
       parseActionScript,
       customPort,
       customCdn,
+      deltaMode,
     }
   ) => {
     let replyPacket;
@@ -131,6 +132,7 @@ ipcMain.on(
       swfMode: (parseActionScript && 'full') || 'simple',
       customPort,
       extractAllFrames: false,
+      deltaMode,
     });
 
     while (replyPacket !== 'done') {
@@ -225,6 +227,7 @@ ipcMain.on(
       parseActionScript,
       customPort,
       debug,
+      deltaMode,
     }
   ) => {
     let replyPacket;
@@ -236,6 +239,7 @@ ipcMain.on(
       swfMode: (parseActionScript && 'full') || 'simple',
       customPort,
       extractAllFrames,
+      deltaMode,
     });
 
     if (debug) {
