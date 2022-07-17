@@ -71,6 +71,20 @@ Once the extraction is done, you can find inflated asset files located in the ou
 
 **Do not close the app even if it hangs. The process might hangs a lot and several tasks require more than dozens of minutes. Be patient while extraction is in progress**
 
+
+#### Delta extraction
+
+![image](https://user-images.githubusercontent.com/19164553/179390974-91716614-5473-4c3a-a452-1cdb9a6e2bd0.png)
+
+You can turn on the delta extraction mode by clicking the delta icon button located at right side of extract data button.
+
+In the delta extraction mode,
+
+- You can pull new assets from API mode only.
+- newly pulled assets will placed inside `delta-latest` directory under your workspace directory.
+- once you pulled delta assets, `Extract Data` feature will only targets assets inside delta directory created above.
+- after your delta extraction is done, `delta-latest` directory will renamed to `delta-{assetVersion}` directory for better labeling.
+
 ## Supported Assets
 - APK
 - Decompiled SWF
