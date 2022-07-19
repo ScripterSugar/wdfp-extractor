@@ -91,13 +91,14 @@ character kyaru
 
 Search and export images files u failed to recover hashes. (WARNING: do not run this command if u have unexported set of images, such as when u only exported character images but general image assets. these unexported set of images will be recognized as unknown images.)
 
-Exported images are saved under [delta-<AssetVersion>]/output/assets/unknown/images
+Exported images are saved under [delta-assetVersion if exists, or workspace root]/output/assets/unknown/images
 
 #### Options:
 **-delta \<targetAssetVersion\>**              Specify target delta asset version if u need to search for specific delta directory. (Available for only those versions u exported with delta-extraction mode)
 
 #### Example:
 checkUnknowns
+
 checkUnknowns -delta 1.532.20
 
 
