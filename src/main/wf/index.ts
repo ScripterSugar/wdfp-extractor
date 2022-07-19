@@ -798,7 +798,10 @@ class WfExtractor {
         (await readFile(`${this.ROOT_PATH}/filePaths.lock`)).toString()
       );
       this.filePaths = [
-        ...new Set([...loadedFilePaths, await this.loadDefaultFilePaths()]),
+        ...new Set([
+          ...loadedFilePaths,
+          ...(await this.loadDefaultFilePaths()),
+        ]),
       ];
     } catch (err) {
       this.filePaths = await this.loadDefaultFilePaths();
@@ -1321,6 +1324,9 @@ class WfExtractor {
 
     const sprites = {};
     const fileNameMap = {};
+
+    this.developWriteJson('workFilePath.json', this.filePaths);
+    this.developWriteJson('workAsFilePath.json', this.asFilePaths);
 
     for (const filePath of [
       ...new Set([...(this.asFilePaths || []), ...this.filePaths]),
