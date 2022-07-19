@@ -39,7 +39,7 @@ search master/ex_boost/odds/ability/alterite_r3_a
 
 ## master [assetpath]
 
-Rename, decompile and export master table (orderedmap) asset from assetpath to output/master directory
+Rename, decompile and export master table (orderedmap) asset from assetpath to output/orderedmap directory
 
 #### Example:
 master master/ex_boost/odds/ability/alterite_r3_a.orderedmap
