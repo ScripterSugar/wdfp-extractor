@@ -77,10 +77,15 @@ Extract and create odds summary json for exboost odds table [JP Only]
 
 Fetch assets from JP asset api server, using baseVersion as client asset version header.
 
+#### Example:
+fetchAssets 1.531.10
+
 ## character [characterId]
 
 Force search for specific [characterId] assets and export them if exists. This command is useful if there's any character assets whose characterId isn't documented in character master table files yet.
 
+#### Example:
+character kyaru
 
 ## checkUnknowns [option]
 
