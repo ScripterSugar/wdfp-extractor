@@ -629,7 +629,7 @@ const AppContent = () => {
       setOpenSelectOption(false);
       setShowDevConsole(true);
 
-      if (/[^A-z/\\ -:]/.test(targetDir)) {
+      if (/[^A-z/\\:-]/.test(targetDir)) {
         setIsExtracting(false);
         return setExtractionError({
           error:
