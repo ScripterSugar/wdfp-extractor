@@ -1834,6 +1834,7 @@ class WfExtractor {
 
       gachaTracker.end();
     } catch (err) {
+      console.log(err);
       logger.log('FATAL: Failed to extract gacha info.');
       logger.progressAbort('Exporting gacha odds table...');
     }
