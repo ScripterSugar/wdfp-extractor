@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { readFile } = require('fs/promises');
+const { parse } = require('csv-parse/sync');
 const zlib = require('zlib');
 
 const asyncUnzip = (...args) =>
@@ -11,6 +12,12 @@ const asyncDeflate = (data) =>
   new Promise((resolve, reject) =>
     zlib.deflate(data, (err, res) => (err ? reject(err) : resolve(res)))
   );
+
+const parseCsv = (data, options = {}) => {
+  const records = parse(data, options);
+
+  return records.reduce((acc, cur) => [...acc, ...cur], []);
+};
 
 const readOrderedMap = async (mapping) => {
   try {
@@ -87,7 +94,10 @@ const readOrderedMap = async (mapping) => {
     return keys.reduce(
       (acc, key, index) => ({
         ...acc,
-        [key]: values[index]?.split?.(',') || values[index],
+        [key]:
+          typeof values[index] === 'string'
+            ? parseCsv(values[index])
+            : values[index],
       }),
       {}
     );
