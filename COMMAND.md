@@ -69,14 +69,16 @@ Rename, decompile and export general asset from assetpath to output/asset direct
 general battle/action/skill/action/rare5/hero_girl_vt22$hero_girl_vt22_2.action.dsl.amf3.deflate
 
 
-
 ## exboost
-
-
 
 Extract and create odds summary json for exboost odds table [JP Only]
 
-## checkUnknowns [option] [assetpath]
+## character [characterId]
+
+Force search for specific [characterId] assets and export them if exists. This command is useful if there's any character assets whose characterId isn't documented in character master table files yet.
+
+
+## checkUnknowns [option]
 
 Search and export images files u failed to recover hashes. (WARNING: do not run this command if u have unexported set of images, such as when u only exported character images but general image assets. these unexported set of images will be recognized as unknown images.)
 
