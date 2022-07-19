@@ -87,7 +87,7 @@ In the delta extraction mode,
 
 #### Supported commands
 
-U can use command line interface for debugging or advanced usage. refer to the [Command documentation](COMMAND.md) for more details.
+U can use in-built commands for debugging or advanced usage. refer to the [Command documentation](COMMAND.md) for more details.
 
 ## Supported Assets
 - APK
