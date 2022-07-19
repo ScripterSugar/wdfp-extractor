@@ -73,6 +73,10 @@ general battle/action/skill/action/rare5/hero_girl_vt22$hero_girl_vt22_2.action.
 
 Extract and create odds summary json for exboost odds table [JP Only]
 
+## fetchAssets [baseVersion]
+
+Fetch assets from JP asset api server, using baseVersion as client asset version header.
+
 ## character [characterId]
 
 Force search for specific [characterId] assets and export them if exists. This command is useful if there's any character assets whose characterId isn't documented in character master table files yet.
