@@ -85,6 +85,10 @@ In the delta extraction mode,
 - once you pulled delta assets, `Extract Data` feature will only targets assets inside delta directory created above.
 - after your delta extraction is done, `delta-latest` directory will renamed to `delta-{assetVersion}` directory for better labeling.
 
+#### Supported commands
+
+U can use in-built commands for debugging or advanced usage. refer to the [Command documentation](COMMAND.md) for more details.
+
 ## Supported Assets
 - APK
 - Decompiled SWF
