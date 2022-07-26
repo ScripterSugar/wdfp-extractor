@@ -2262,6 +2262,11 @@ builder-util@22.13.1:
     stat-mode "^1.0.0"
     temp-file "^3.4.0"
 
+bytearray-nodejs@^1.0.1:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/bytearray-nodejs/-/bytearray-nodejs-1.0.1.tgz#342c5ed313845ac080c8b0eea7d17c0a183142cc"
+  integrity sha512-MjJmNmwjDMR/WCMUP8e/v8zFwscyzu7DXsVFJZBE+uK0uUTtCnuMXftOQICuuvt1GSVsJVe9qiIJ6sbgImSlcQ==
+
 bytes@3.0.0:
   version "3.0.0"
   resolved "https://registry.yarnpkg.com/bytes/-/bytes-3.0.0.tgz#d32815404d689699f85a4ea4fa8755dd13a96048"

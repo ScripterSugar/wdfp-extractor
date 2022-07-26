@@ -114,7 +114,7 @@ export const withAsyncBandwidth = (
   let index = 0;
 
   while (entries.length) {
-    const currentEntry = entries.pop();
+    const currentEntry = entries.shift();
     const currentIndex = index;
 
     const beforeResponse = chainedResponses[iterator];

@@ -43,7 +43,12 @@ const RESOURCES_PATH = app.isPackaged
   : path.join(__dirname, '../../../assets');
 
 const API_PATHS = {
-  base: {
+  host: {
+    jp: 'https://api.worldflipper.jp/latest/api/index.php',
+    en: 'https://na.wdfp.kakaogames.com/latest/api/index.php',
+    kr: 'https://kr.wdfp.kakaogames.com/latest/api/index.php',
+  },
+  asset: {
     jp: 'https://api.worldflipper.jp/latest/api/index.php/gacha/exec',
     en: 'https://na.wdfp.kakaogames.com/latest/api/index.php/gacha/exec',
     kr: 'https://kr.wdfp.kakaogames.com/latest/api/index.php/gacha/exec',
@@ -2089,11 +2094,9 @@ class WfExtractor {
         }),
       };
 
-      console.log(API_PATHS.base[this.regionVariant], requestHeaders);
-
       let fileListRes;
       try {
-        fileListRes = await fetch(API_PATHS.base[this.regionVariant], {
+        fileListRes = await fetch(API_PATHS.asset[this.regionVariant], {
           method: 'get',
           headers: requestHeaders,
         });
@@ -2152,11 +2155,12 @@ class WfExtractor {
 
       const fullAssetList = fullList?.archive || [];
 
-      const targetAssetList = [...diffAssetList];
+      const targetAssetList = [];
 
       if (!ignoreFull) {
         targetAssetList.push(...fullAssetList);
       }
+      targetAssetList.push(...diffAssetList);
 
       const totalSize = Math.round(
         targetAssetList.reduce((acc, asset) => acc + asset.size, 0) / 1024
@@ -2167,8 +2171,10 @@ class WfExtractor {
         max: totalSize,
       });
 
+      let extractionIndex = 0;
+
       await Promise.all(
-        withAsyncBandwidth(targetAssetList, async (asset) => {
+        withAsyncBandwidth(targetAssetList, async (asset, currentIndex) => {
           const { location, size } = asset;
           let refinedLocation = location;
 
@@ -2176,14 +2182,19 @@ class WfExtractor {
             refinedLocation = location.replace('{$cdnAddress}', cdn);
           }
           try {
-            console.log(refinedLocation);
             const downloadedZip = await (await fetch(refinedLocation)).buffer();
+
+            while (extractionIndex !== currentIndex) {
+              await sleep(50);
+            }
             new AdmZip(downloadedZip).extractAllTo(
               `${this.ROOT_PATH}/dump`,
               true
             );
           } catch (err) {
             console.log(err);
+          } finally {
+            extractionIndex += 1;
           }
 
           assetTracker.progress(Math.round(size / 1024));
@@ -2301,6 +2312,75 @@ class WfExtractor {
     return JSON.parse(confirmedDigestString);
   };
 
+  //   fetch(
+  //     'https://kr.wdfp.kakaogames.com/latest/api/index.php/comic/get_list',
+  //     {
+  //       method: 'post',
+  //       headers: {
+  //         'Content-Type': 'application/x-www-form-urlencoded',
+  //         RES_VER: '2.0.51',
+  //         APP_VER: '0.0.45',
+  //         DEVICE_LANG: 'ko',
+  //         PARAM: '7b382ac98c21bac8be9be9de25d8d9b2525984fd',
+  //         UDID: 'BC51B46F-B7D5-49C3-A651-62D255A49C8471D9',
+  //         DEVICE: '2',
+  //         'x-flash-version': '33,1,1,554',
+  //         Referer: 'app:/worldflipper_android_release.swf',
+  //       },
+  //       body: 'g6pwYWdlX2luZGV4BqRraW5kAKl2aWV3ZXJfaWTONM1PIQ==',
+  //     }
+  //   )
+  // )
+
+  fetchLatestAssetVersion = async ({
+    regionVariant = this.regionVariant,
+  } = {}) => {
+    const latestAssetTracker = logger.progressStart({
+      id: 'Fetching latest asset info from server...',
+      max: 1,
+    });
+
+    const requestHeaders = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
+      Accept: 'gzip, deflate, br',
+      RES_VER: '0.0.0',
+      ...(regionVariant !== 'jp' && {
+        DEVICE_LANG: (regionVariant === 'en' && 'en') || 'ko',
+      }),
+    };
+
+    let fileListRes;
+    try {
+      fileListRes = await fetch(API_PATHS.asset[regionVariant], {
+        method: 'get',
+        headers: requestHeaders,
+      });
+    } catch (err) {
+      console.log(err);
+      latestAssetTracker.end();
+
+      logger.log(`Failed to fetch asset list: ${err.message}`);
+      return null;
+    }
+    latestAssetTracker.end();
+    if (fileListRes.status !== 200) {
+      logger.log(
+        `API Request failed: ${fileListRes.status} ${fileListRes.statusText}`
+      );
+      logger.log(
+        `The error maybe originated from the server blocking your api access due to access region (KR/CN ip is blocked from jp)`
+      );
+      return null;
+    }
+
+    const bodyString = (await fileListRes.buffer()).toString();
+    const base64Decoded = Buffer.from(bodyString, 'base64');
+    const decodedMsgPack = await msgpack.decode(base64Decoded);
+
+    return decodedMsgPack.data.info.eventual_target_asset_version;
+  };
+
   development = async (debug) => {
     await this.init();
     await this.buildDigestFileMap();
@@ -2312,6 +2392,71 @@ class WfExtractor {
     this.__debug = debug;
 
     switch (true) {
+      case /^fetchComics/.test(debug): {
+        const args = debug.split(' ').slice(1);
+        let regionVariant = 'jp';
+        args.forEach((arg, idx) => {
+          if (/^-region$/.test(arg)) {
+            regionVariant = args[idx + 1];
+          }
+        });
+        const latestAssetVersion = await this.fetchLatestAssetVersion({
+          regionVariant,
+        });
+
+        const comicListIndex = 5;
+
+        const fetchUrl = `${API_PATHS.host[regionVariant]}/comic/get_list`;
+        const fetchOptions = {
+          method: 'post',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            RES_VER: latestAssetVersion,
+            APP_VER: '0.0.45',
+            ...(regionVariant !== 'jp' && {
+              DEVICE_LANG: (regionVariant === 'en' && 'en') || 'ko',
+            }),
+            PARAM: '7b382ac98c21bac8be9be9de25d8d9b2525984fd',
+            UDID: 'BC51B46F-B7D5-49C3-A651-62D255A49C8471D9',
+            DEVICE: '2',
+          },
+          body: (
+            await msgpack.encode({
+              page_index: comicListIndex,
+              kind: 0,
+              viewer_id: 885870369,
+            })
+          ).toString('base64'),
+        };
+
+        //   await (await (fetch('https://kr.wdfp.kakaogames.com/latest/api/index.php/comic/get_list', {
+        //    method: 'post',
+        //    headers: {
+        //        'Content-Type': 'application/x-www-form-urlencoded',
+        //        RES_VER: '2.0.51',
+        //        APP_VER: '0.0.45',
+        //        DEVICE_LANG: 'ko',
+        //        PARAM: '7b382ac98c21bac8be9be9de25d8d9b2525984fd',
+        //        UDID: 'BC51B46F-B7D5-49C3-A651-62D255A49C8471D9',
+        //        DEVICE: '2',
+        //      },
+        //    body: 'g6pwYWdlX2luZGV4BqRraW5kAKl2aWV3ZXJfaWTONM1PIQ==',
+        //  }))).text()
+
+        console.log(fetchUrl, fetchOptions);
+
+        const fetchedResult = await (
+          await fetch(fetchUrl, fetchOptions)
+        ).text();
+        console.log(fetchedResult);
+
+        const comicResponse = await msgpack.decode(
+          Buffer.from(fetchedResult, 'base64')
+        );
+        console.log(comicResponse);
+
+        return null;
+      }
       case /fetchAssets/.test(debug): {
         const args = debug.split(' ').slice(1);
         await this.fetchAssetsFromApi(args[0]);
