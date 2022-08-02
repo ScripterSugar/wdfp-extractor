@@ -50,7 +50,7 @@ To use this tool, your device should at least have file-listing access to the /d
 
 #### Select workspace directory
 
-Select the directory you want to use as workspace directory. Note that your directory must only includes englishes or numbers. I recommend you to use the directory under the root directory in the disk such as `C:/wafuriextract`
+Select the directory you want to use as workspace directory. Note that your directory must only includes english alphabets or numbers. I recommend you to use the directory under the root directory in the disk such as `C:/wafuriextract`
 
 #### Pull Assets from API / Device / Emulator
 
