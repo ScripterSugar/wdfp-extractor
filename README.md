@@ -113,7 +113,7 @@ U can use in-built commands for debugging or advanced usage. refer to the [Comma
 - Data viewer
 
 ## Known issues
-The library is open to your contribution! if you're having problem with the issues that listed here, feel free to open PRs to resolve it and make other pepople can benefit from your contribution.
+The repository is open to your contribution! if you're having problem with the issues that listed here, feel free to open PRs to resolve it and make other pepople can benefit from your contribution.
 
 - Whitespaces in Windows user name / extraction directory path causing crashes on extraction process. (Due date: TBD)
 
