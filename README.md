@@ -1,5 +1,9 @@
 # World Filpper Asset Extractor
 
+
+[![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://stand-with-ukraine.pp.ua)
+
+
 #### DISCLAIMER: All the rights of extracted assets belong to cygames/citail and/or its affiliates. Do not share the files extracted by the tool. I do not encourage you to use any of extracted assets in inappropriate purpose. If you use any assets extracted by this tool, you do so at your sole risk.
 
 Asset Extraction tool for World Flipper.
