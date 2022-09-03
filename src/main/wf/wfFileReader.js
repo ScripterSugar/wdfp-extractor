@@ -368,7 +368,7 @@ export default class WfFileReader {
             name: item[1],
             description: item[7],
             maxLevel: parseInt(item[8], 10),
-            rarity: parseInt(item[10], 10),
+            rarity: parseInt(item[11], 10),
             _raw: item,
           },
         }),
@@ -530,7 +530,6 @@ export default class WfFileReader {
           if (/equipment|ability_soul/.test(name)) {
             destPath = `${this._rootDir}/output/assets/item/eliyaBot`;
             const equipmentMap = await this.loadOrBuildEquipmentMap();
-
             const isSoul = /ability_soul/.test(name);
             const equipmentInfo = equipmentMap[saveNameRoot];
             const { rarity, itemId } = equipmentInfo || { rarity: 1 };

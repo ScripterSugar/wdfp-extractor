@@ -2638,6 +2638,7 @@ class WfExtractor {
         let animate = false;
         let timelineRoot = '';
         let noTimeline = false;
+        let deltaVer = false;
 
         args.forEach((arg, idx) => {
           if (/^-scale$/.test(arg)) {
@@ -2655,7 +2656,17 @@ class WfExtractor {
           if (/^-animate$/.test(arg)) {
             animate = true;
           }
+          if (/^-delta$/.test(arg)) {
+            deltaVer = args[idx + 1];
+          }
         });
+
+        if (deltaVer) {
+          this.deltaMode = deltaVer;
+          await this.setRootPath(`${this.ROOT_PATH}/delta-${deltaVer}`);
+          await this.init();
+          await this.buildDigestFileMap();
+        }
 
         if (eliyaBot) {
           await this.fileReader.buildSpriteBackgrounds(scale);
