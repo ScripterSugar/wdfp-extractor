@@ -21,6 +21,8 @@ Crop sprites and scale cropped images to the specified ratio.
 #### Options:
 **-scale \<ratio\>**              Specify scale ratio of cropped sprite images. default to 1. 
 
+**-delta \<deltaVer\>**           Specify target delta version to change work directory to that delta directory.
+
 **-eliyabot**                   Set this flag if you want to extract equipment sprites from item/sprite_sheet specially formatted for eliyabot asset format.
 
 #### Example:
