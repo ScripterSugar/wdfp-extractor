@@ -26,7 +26,7 @@ Crop sprites and scale cropped images to the specified ratio.
 **-eliyabot**                   Set this flag if you want to extract equipment sprites from item/sprite_sheet specially formatted for eliyabot asset format.
 
 #### Example:
-sprite -scale 4 -eliyabot item/sprite_sheet
+sprite -delta 1.570.21 -scale 4 item/sprite_sheet
 
 sprite -scale 16 character/battle_maid_xm19/pixelart/sprite_sheet
 
