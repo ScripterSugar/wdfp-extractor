@@ -123,7 +123,7 @@ I won't actively troubleshoot the bugs as far as it works for me, so if you're h
 
 If you want more asset coverage added to tool, please provide the details about assets you want to export, including file formats, asset path, format of data, etc.
 
-The application built from the [electron-react-boilerplate](https://github.com/electron-react-boilerplate/electron-react-boilerplate). Refer to the repository to check how to install dependencies and start development on your local machine.
+The application is built from the [electron-react-boilerplate](https://github.com/electron-react-boilerplate/electron-react-boilerplate). Refer to the repository to check how to install dependencies and start development on your local machine.
 
 
 
