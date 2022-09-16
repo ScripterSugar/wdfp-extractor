@@ -331,6 +331,7 @@ ipcMain.on(
         if (extractionPhase <= 7.5) {
           if (extractGeneralAmf) {
             await wfExtractor.extractPossibleGeneralAmf3Assets();
+            await wfExtractor.extractSkillEffects();
           }
 
           extractionPhase = 8;

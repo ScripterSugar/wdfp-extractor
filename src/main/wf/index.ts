@@ -9,7 +9,7 @@ import fetch from 'node-fetch';
 import msgpack from 'msgpack-lite';
 import { app } from 'electron';
 import { ChildProcess, spawn } from 'child_process';
-import { mkdir, readdir, readFile, stat, writeFile } from 'fs/promises';
+import { access, mkdir, readdir, readFile, stat, writeFile } from 'fs/promises';
 import WfFileReader from './wfFileReader';
 import logger from './logger';
 import { LSResult, WFExtractorMetaData } from './typedefs';
@@ -1562,142 +1562,156 @@ class WfExtractor {
   };
 
   extractSkillEffects = async () => {
-    let battleEffectPaths = [];
+    try {
+      let battleEffectPaths = [];
 
-    for (let i = 1; i <= 5; i += 1) {
-      const rarityPath = `${this.ROOT_PATH}/output/assets/battle/action/skill/action/rare${i}`;
-      const actionDescriptors = await readdir(rarityPath);
+      for (let i = 1; i <= 5; i += 1) {
+        const rarityPath = `${this.ROOT_PATH}/output/assets/battle/action/skill/action/rare${i}`;
 
-      for (const actionDescriptor of actionDescriptors) {
-        const descContent = await readFile(`${rarityPath}/${actionDescriptor}`);
+        try {
+          await access(rarityPath);
+        } catch (err) {
+          continue;
+        }
 
-        battleEffectPaths.push(
-          ...Array.from(
-            descContent.toString('utf-8').matchAll(POSSIBLE_PATH_REGEX)
-          ).map(([match]) => match)
+        const actionDescriptors = await readdir(rarityPath);
+
+        for (const actionDescriptor of actionDescriptors) {
+          const descContent = await readFile(
+            `${rarityPath}/${actionDescriptor}`
+          );
+
+          battleEffectPaths.push(
+            ...Array.from(
+              descContent.toString('utf-8').matchAll(POSSIBLE_PATH_REGEX)
+            ).map(([match]) => match)
+          );
+        }
+      }
+
+      battleEffectPaths = Array.from(
+        new Set([
+          ...battleEffectPaths,
+          ...battleEffectPaths.map(this.generateNormalPath),
+        ])
+      );
+
+      const foundEffectAssets = [];
+      const foundEffectAmf3Assets = [];
+      const sprites = {};
+
+      for (const effectPath of battleEffectPaths) {
+        const normalPath = this.generateNormalPath(effectPath);
+        let refinedEffectPath = effectPath;
+        let refinedNormalPath = normalPath;
+
+        if (/^character/.test(effectPath)) {
+          refinedEffectPath = [
+            ...effectPath.split('/').slice(0, -1),
+            'sprite_sheet',
+          ].join('/');
+          refinedNormalPath = [
+            ...normalPath.split('/').slice(0, -1),
+            'sprite_sheet',
+          ].join('/');
+        }
+
+        pushExist(
+          foundEffectAssets,
+          await this.digestAndCheckFilePath(`${refinedEffectPath}.png`)
         );
-      }
-    }
-
-    battleEffectPaths = Array.from(
-      new Set([
-        ...battleEffectPaths,
-        ...battleEffectPaths.map(this.generateNormalPath),
-      ])
-    );
-
-    const foundEffectAssets = [];
-    const foundEffectAmf3Assets = [];
-    const sprites = {};
-
-    for (const effectPath of battleEffectPaths) {
-      const normalPath = this.generateNormalPath(effectPath);
-      let refinedEffectPath = effectPath;
-      let refinedNormalPath = normalPath;
-
-      if (/^character/.test(effectPath)) {
-        refinedEffectPath = [
-          ...effectPath.split('/').slice(0, -1),
-          'sprite_sheet',
-        ].join('/');
-        refinedNormalPath = [
-          ...normalPath.split('/').slice(0, -1),
-          'sprite_sheet',
-        ].join('/');
-      }
-
-      pushExist(
-        foundEffectAssets,
-        await this.digestAndCheckFilePath(`${refinedEffectPath}.png`)
-      );
-      pushExist(
-        foundEffectAmf3Assets,
-        await this.digestAndCheckFilePath(`${effectPath}.frame.amf3.deflate`)
-      );
-      pushExist(
-        foundEffectAmf3Assets,
-        await this.digestAndCheckFilePath(`${effectPath}.parts.amf3.deflate`)
-      );
-      if (
         pushExist(
           foundEffectAmf3Assets,
-          await this.digestAndCheckFilePath(
-            `${refinedEffectPath}.atlas.amf3.deflate`
-          )
-        )
-      ) {
-        if (!sprites[refinedNormalPath]) {
-          sprites[refinedNormalPath] = {
-            type: 'sprite',
-            timelines: [],
-          };
-        }
-        sprites[
-          refinedNormalPath
-        ].atlas = `${refinedEffectPath}.atlas.amf3.json`;
-      }
-      if (
+          await this.digestAndCheckFilePath(`${effectPath}.frame.amf3.deflate`)
+        );
         pushExist(
           foundEffectAmf3Assets,
-          await this.digestAndCheckFilePath(
-            `${effectPath}.timeline.amf3.deflate`
+          await this.digestAndCheckFilePath(`${effectPath}.parts.amf3.deflate`)
+        );
+        if (
+          pushExist(
+            foundEffectAmf3Assets,
+            await this.digestAndCheckFilePath(
+              `${refinedEffectPath}.atlas.amf3.deflate`
+            )
           )
-        )
-      ) {
-        if (!sprites[refinedNormalPath]) {
-          sprites[refinedNormalPath] = {
-            type: 'animated',
-            timelines: [],
-          };
+        ) {
+          if (!sprites[refinedNormalPath]) {
+            sprites[refinedNormalPath] = {
+              type: 'sprite',
+              timelines: [],
+            };
+          }
+          sprites[
+            refinedNormalPath
+          ].atlas = `${refinedEffectPath}.atlas.amf3.json`;
         }
-        sprites[refinedNormalPath].type = 'animated';
-        sprites[refinedNormalPath].timelines.push(
-          `${effectPath}.timeline.amf3.json`
+        if (
+          pushExist(
+            foundEffectAmf3Assets,
+            await this.digestAndCheckFilePath(
+              `${effectPath}.timeline.amf3.deflate`
+            )
+          )
+        ) {
+          if (!sprites[refinedNormalPath]) {
+            sprites[refinedNormalPath] = {
+              type: 'animated',
+              timelines: [],
+            };
+          }
+          sprites[refinedNormalPath].type = 'animated';
+          sprites[refinedNormalPath].timelines.push(
+            `${effectPath}.timeline.amf3.json`
+          );
+        }
+      }
+
+      const effectTracker = logger.progressStart({
+        id: 'Exporting effect images...',
+        max: foundEffectAssets.length,
+      });
+      for (const [fileName, filePath] of foundEffectAssets) {
+        effectTracker.progress();
+        await this.fileReader.readPngAndGenerateOutput(filePath, fileName);
+      }
+      effectTracker.end();
+      const amfTracker = logger.progressStart({
+        id: 'Exporting effect atlases...',
+        max: foundEffectAmf3Assets.length,
+      });
+      for (const [fileName, filePath] of foundEffectAmf3Assets) {
+        amfTracker.progress();
+        await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
+      }
+      amfTracker.end();
+
+      await this.developWriteJson('effect_sprites.json', sprites);
+
+      const spriteEntries = Object.entries(sprites);
+
+      const spriteTracker = logger.progressStart({
+        id: 'Rendering skill effect sprites...',
+        max: spriteEntries.length,
+      });
+
+      for (const [rootPath, { type, timelines, atlas }] of spriteEntries) {
+        spriteTracker.progress();
+        const splittedRootPath = rootPath.split('/');
+        const sheetName = splittedRootPath.pop();
+        await this.processSpritesByAtlases(
+          `${this.ROOT_PATH}/output/assets/${splittedRootPath.join('/')}`,
+          {
+            sheetName,
+            extractAll: true,
+          }
         );
       }
+      spriteTracker.end();
+    } catch (err) {
+      console.log(err);
+      logger.log('Failed to load battle effect paths.');
     }
-
-    const effectTracker = logger.progressStart({
-      id: 'Exporting effect images...',
-      max: foundEffectAssets.length,
-    });
-    for (const [fileName, filePath] of foundEffectAssets) {
-      effectTracker.progress();
-      await this.fileReader.readPngAndGenerateOutput(filePath, fileName);
-    }
-    effectTracker.end();
-    const amfTracker = logger.progressStart({
-      id: 'Exporting effect atlases...',
-      max: foundEffectAmf3Assets.length,
-    });
-    for (const [fileName, filePath] of foundEffectAmf3Assets) {
-      amfTracker.progress();
-      await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
-    }
-    amfTracker.end();
-
-    await this.developWriteJson('effect_sprites.json', sprites);
-
-    const spriteEntries = Object.entries(sprites);
-
-    const spriteTracker = logger.progressStart({
-      id: 'Rendering skill effect sprites...',
-      max: spriteEntries.length,
-    });
-
-    for (const [rootPath, { type, timelines, atlas }] of spriteEntries) {
-      spriteTracker.progress();
-      const splittedRootPath = rootPath.split('/');
-      const sheetName = splittedRootPath.pop();
-      await this.processSpritesByAtlases(
-        `${this.ROOT_PATH}/output/assets/${splittedRootPath.join('/')}`,
-        {
-          sheetName,
-          extractAll: true,
-        }
-      );
-    }
-    spriteTracker.end();
   };
 
   developWriteJson = async (fileName, content) => {
