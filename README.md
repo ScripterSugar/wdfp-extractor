@@ -89,7 +89,7 @@ In the delta extraction mode,
 - You can pull new assets from API mode only.
 - newly pulled assets will placed inside `delta-latest` directory under your workspace directory.
 - once you pulled delta assets, `Extract Data` feature will only targets assets inside delta directory created above.
-- after your delta extraction is done, `delta-latest` directory will renamed to `delta-{assetVersion}` directory for better labeling.
+- after your delta extraction is done, `delta-latest` directory will be renamed to `delta-{assetVersion}` directory for better labeling.
 
 #### Supported commands
 
