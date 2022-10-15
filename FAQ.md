@@ -23,11 +23,17 @@ Some assets, especially those with prefix `scene/general`, are not downloadable 
 So if you want to extract those assets manually, follow the next steps.
 
 1. Unpack application APK file.
+
 2. Locate the bundled assets saved in `PATH_TO_UNPACKED_APK/assets/bundle.zip.`
+
 3. Unzip it.
+
 4. Copy all the contents inside `bundle.zip/production/bundle` `bundle.zip/production/medium_bundle` into `WORK_DIRECTORY/dump/upload`. WORK_DIR is the Extraction Directory you selected from the tool. (Make sure copied raw asset file paths are look like `WORK_DIR/dump/upload/73/4130924e07d945ae79acac1599758c4e50c432`)
+
 5. Open `WORK_DIR/metadata.json` file and modify the key `lockedHashMap` value to `false`.
+
     5.1. If you want to confirm everything was done correctly, try executing the command `image scene/general/sprite_sheet.png`. If that command successfully exports the designated asset then you're good to go.
+
 6. Try extracting assets again.
 
 If you can't still find assets after 6 but command in 5.1 works, make sure you turned on the `Search ActionScripts for assets` option and put all the decompiled SWF scripts in the right location. or you can try manually extract them one by one using commands. note that the paths you mentioned above are generated paths and they're actually included in one same sprite file named `scene/general/sprite_sheet` so you'd want to run sprite `scene/general/sprite_sheet` command to crop the image and save cropped sprite to designated path.
