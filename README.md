@@ -95,6 +95,13 @@ In the delta extraction mode,
 
 U can use in-built commands for debugging or advanced usage. refer to the [Command documentation](COMMAND.md) for more details.
 
+## Frequently asked questions
+
+Refer to the [FAQ for more details](FAQ.md).
+
+Thanks to @michaelcurry for the documentation.
+
+
 ## Supported Assets
 - APK
 - Decompiled SWF
