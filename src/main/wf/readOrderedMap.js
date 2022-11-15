@@ -21,6 +21,14 @@ const parseCsv = (data, options = {}) => {
 
 const readOrderedMap = async (mapping) => {
   try {
+    const rawUnzipped = await asyncUnzip(mapping);
+
+    return parseCsv(rawUnzipped.toString('utf-8'));
+  } catch (err) {
+    // pass
+  }
+
+  try {
     const readHeaderSize = (buffer) => buffer.readInt32LE(0);
 
     const headerSize = readHeaderSize(mapping);
