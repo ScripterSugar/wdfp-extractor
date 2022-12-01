@@ -3,6 +3,8 @@ import electron, { ipcMain } from 'electron';
 class Logger {
   window: electron.BrowserWindow;
 
+  preventDoneLog = false;
+
   constructor({ window }: { window: electron.BrowserWindow }) {
     this.window = window;
     this.absCount = 0;
@@ -78,13 +80,16 @@ class Logger {
           },
         });
       },
-      end: () => {
+      end: (preventLog) => {
         this.data({
           type: 'progressEnd',
           data: {
             id,
           },
         });
+        if (preventLog || this.preventDoneLog) {
+          return;
+        }
         this.log(`${id} Done`);
       },
     };

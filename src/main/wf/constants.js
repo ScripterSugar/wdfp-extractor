@@ -13,6 +13,9 @@ export const MERGEABLE_PATH_PREFIXES = [
   'dump/small_bundle/',
 ];
 
+export const ACTION_DSL_FORMAT_DEFLATE = '.action.dsl.amf3.deflate';
+export const ENEMY_DSL_FORMAT_DEFLATE = '.esdl.amf3.deflate';
+
 export const CHARACTER_SPRITE_PRESETS = [
   (character, index) => `character/${character}/pixelart/sprite_sheet`,
   (character, index) => `character/${character}/pixelart/special_sprite_sheet`,
