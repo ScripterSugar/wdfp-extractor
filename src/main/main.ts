@@ -302,7 +302,9 @@ ipcMain.on(
         }
 
         if (extractionPhase <= 5.5) {
-          await wfExtractor.extractGachaOdds();
+          if (extractMaster) {
+            await wfExtractor.extractGachaOdds();
+          }
 
           extractionPhase = 6;
         }

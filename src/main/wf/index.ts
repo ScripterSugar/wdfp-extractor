@@ -1579,7 +1579,12 @@ class WfExtractor {
     });
     for (const [fileName, filePath] of possibleGeneralAmfAssets) {
       amfTracker.progress();
-      await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
+      try {
+        await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
+      } catch (err) {
+        console.log(fileName);
+        console.log(err);
+      }
     }
     amfTracker.end();
   };
@@ -2566,6 +2571,22 @@ class WfExtractor {
 
     this.__debug = debug;
 
+    let deltaVer = false;
+    const args = debug.split(' ').slice(1);
+
+    args.forEach((arg, idx) => {
+      if (/^-delta$/.test(arg)) {
+        deltaVer = args[idx + 1];
+      }
+    });
+
+    if (deltaVer) {
+      this.deltaMode = deltaVer;
+      await this.setRootPath(`${this.ROOT_PATH}/delta-${deltaVer}`);
+      await this.init();
+      await this.buildDigestFileMap();
+    }
+
     switch (true) {
       case /^fetchComics/.test(debug): {
         const args = debug.split(' ').slice(1);
@@ -2640,21 +2661,9 @@ class WfExtractor {
       case /^checkUnknowns/.test(debug): {
         const args = debug.split(' ').slice(1);
 
-        let targetDelta;
+        const targetDirectory = `${this.ROOT_PATH}/dump`;
 
-        args.forEach((arg, idx) => {
-          if (/^-delta$/.test(arg)) {
-            targetDelta = args[idx + 1];
-          }
-        });
-
-        const rootDir = `${this.ROOT_PATH}${
-          (targetDelta && `/delta-${targetDelta}`) || ''
-        }`;
-
-        const targetDirectory = `${rootDir}/dump`;
-
-        const savedDigests = await this.loadConfirmedDigests(rootDir);
+        const savedDigests = await this.loadConfirmedDigests(this.ROOT_PATH);
 
         const unknownAssets = [];
         let total = 0;
@@ -2700,7 +2709,7 @@ class WfExtractor {
             await this.fileReader.readPngAndGenerateOutput(
               unknownAsset[0],
               `unknown/images/${unknownAsset[1]}.png`,
-              { rootDir }
+              { rootDir: this.ROOT_PATH }
             );
             unknownImages += 1;
           } catch (err) {
@@ -2813,7 +2822,6 @@ class WfExtractor {
         let animate = false;
         let timelineRoot = '';
         let noTimeline = false;
-        let deltaVer = false;
 
         args.forEach((arg, idx) => {
           if (/^-scale$/.test(arg)) {
@@ -2831,17 +2839,7 @@ class WfExtractor {
           if (/^-animate$/.test(arg)) {
             animate = true;
           }
-          if (/^-delta$/.test(arg)) {
-            deltaVer = args[idx + 1];
-          }
         });
-
-        if (deltaVer) {
-          this.deltaMode = deltaVer;
-          await this.setRootPath(`${this.ROOT_PATH}/delta-${deltaVer}`);
-          await this.init();
-          await this.buildDigestFileMap();
-        }
 
         if (eliyaBot) {
           await this.fileReader.buildSpriteBackgrounds(scale);
