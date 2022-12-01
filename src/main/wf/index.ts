@@ -20,18 +20,21 @@ import {
   asyncReadDir,
   asyncReadFile,
   asyncRename,
+  deepSearchUniqueMeaningfulStringsFromObject,
   refineLs,
   sleep,
   spawnCommand,
   withAsyncBandwidth,
 } from './helpers';
 import {
+  ACTION_DSL_FORMAT_DEFLATE,
   BASE_ODD_MAP,
   CHARACTER_AMF_PRESERTS,
   CHARACTER_SPRITE_PRESETS,
   CHARACTER_VOICE_PRESETS,
   COMMON_FILE_FORMAT,
   DATEFORMAT_A,
+  ENEMY_DSL_FORMAT_DEFLATE,
   IS_DEVELOPMENT,
   MERGEABLE_PATH_PREFIXES,
   NOX_PORT_LIST,
@@ -1319,23 +1322,27 @@ class WfExtractor {
     return splittedPath.join('/');
   };
 
-  loadPossibleAssets = async () => {
-    if (this.possibleAssetCache) return this.possibleAssetCache;
+  loadPossibleAssets = async (paths) => {
+    if (this.possibleAssetCache && !paths) return this.possibleAssetCache;
 
     const possibleImageAssets = [];
     const possibleAudioAssets = [];
     const possibleImageAmfAssets = [];
     const possibleGeneralAmfAssets = [];
+    const possibleEsdlAssets = [];
 
     const sprites = {};
     const fileNameMap = {};
 
-    this.developWriteJson('workFilePath.json', this.filePaths);
-    this.developWriteJson('workAsFilePath.json', this.asFilePaths);
+    if (!paths) {
+      this.developWriteJson('workFilePath.json', this.filePaths);
+      this.developWriteJson('workAsFilePath.json', this.asFilePaths);
+    }
 
-    for (const filePath of [
-      ...new Set([...(this.asFilePaths || []), ...this.filePaths]),
-    ].filter((value) => !!value)) {
+    for (const filePath of paths ||
+      [...new Set([...(this.asFilePaths || []), ...this.filePaths])].filter(
+        (value) => !!value
+      )) {
       pushExist(
         possibleImageAssets,
         await this.digestAndCheckFilePath(`${filePath}.png`)
@@ -1348,7 +1355,15 @@ class WfExtractor {
       );
       pushExist(
         possibleGeneralAmfAssets,
-        await this.digestAndCheckFilePath(`${filePath}.action.dsl.amf3.deflate`)
+        await this.digestAndCheckFilePath(
+          `${filePath}${ACTION_DSL_FORMAT_DEFLATE}`
+        )
+      );
+      pushExist(
+        possibleEsdlAssets,
+        await this.digestAndCheckFilePath(
+          `${filePath}${ENEMY_DSL_FORMAT_DEFLATE}`
+        )
       );
       const normalPath = this.generateNormalPath(filePath);
       pushExist(
@@ -1365,13 +1380,27 @@ class WfExtractor {
       );
       pushExist(
         possibleGeneralAmfAssets,
+        await this.digestAndCheckFilePath(`${filePath}.frame.amf3.deflate`)
+      );
+      pushExist(
+        possibleGeneralAmfAssets,
+        await this.digestAndCheckFilePath(`${filePath}.parts.amf3.deflate`)
+      );
+      pushExist(
+        possibleGeneralAmfAssets,
+        await this.digestAndCheckFilePath(`${filePath}.timeline.amf3.deflate`)
+      );
+      pushExist(
+        possibleGeneralAmfAssets,
         await this.digestAndCheckFilePath(
           `${filePath.replace(/\/[A-z0-9_]*$/, '/sprite_sheet')}.atf.deflate`
         )
       );
     }
 
-    await this.developWriteJson('image_assets.json', possibleImageAssets);
+    if (!paths) {
+      await this.developWriteJson('image_assets.json', possibleImageAssets);
+    }
 
     const amf3Tracker = logger.progressStart({
       id: 'Searching for possible amf3 assets...',
@@ -1392,11 +1421,11 @@ class WfExtractor {
       const pixelartFrameEntry = await this.digestAndCheckFilePath(
         imagePath.replace(fileName, 'pixelart.frame.amf3.deflate')
       );
-      const frameEntry = await this.digestAndCheckFilePath(
-        imagePath.replace(fileName, `${fileNameRoot}.frame.amf3.deflate`)
-      );
       const pixelArtTimelineEntry = await this.digestAndCheckFilePath(
         imagePath.replace(fileName, 'pixelart.timeline.amf3.deflate')
+      );
+      const frameEntry = await this.digestAndCheckFilePath(
+        imagePath.replace(fileName, `${fileNameRoot}.frame.amf3.deflate`)
       );
       const timelineEntry = await this.digestAndCheckFilePath(
         imagePath.replace(fileName, `${fileNameRoot}.timeline.amf3.deflate`)
@@ -1437,20 +1466,91 @@ class WfExtractor {
     }
     amf3Tracker.end();
 
+    if (paths) {
+      return {
+        possibleImageAssets,
+        possibleAudioAssets,
+        possibleImageAmfAssets,
+        possibleGeneralAmfAssets,
+        possibleEsdlAssets,
+        sprites,
+        fileNameMap,
+      };
+    }
+
     this.possibleAssetCache = {
       possibleImageAssets,
       possibleAudioAssets,
       possibleImageAmfAssets,
       possibleGeneralAmfAssets,
+      possibleEsdlAssets,
       sprites,
       fileNameMap,
     };
-
     return this.possibleAssetCache;
   };
 
-  extractPossibleAudioAssets = async () => {
-    const { possibleAudioAssets } = await this.loadPossibleAssets();
+  loadAndExtractPossibleAssets = async (
+    paths?: string[],
+    {
+      exclude,
+      preventDoneLog,
+    }: {
+      exclude: ['image', 'audio', 'general', 'esdl'];
+      preventDoneLog: boolean;
+    } = {
+      exclude: [],
+      preventDoneLog: false,
+    }
+  ) => {
+    logger.preventDoneLog = preventDoneLog;
+
+    const possibleAssets = await this.loadPossibleAssets(paths);
+
+    if (!exclude.includes('image')) {
+      await this.extractPossibleImageAssets({
+        cropSprites: true,
+        possibleAssets,
+      });
+    }
+    if (!exclude.includes('audio')) {
+      await this.extractPossibleAudioAssets(possibleAssets);
+    }
+    if (!exclude.includes('general')) {
+      await this.extractPossibleGeneralAmf3Assets(possibleAssets);
+    }
+    if (!exclude.includes('esdl')) {
+      await this.extractPossibleEnemyDslAssets(possibleAssets);
+    }
+
+    logger.preventDoneLog = false;
+
+    return possibleAssets;
+  };
+
+  extractPossibleEnemyDslAssets = async (possibleAssets) => {
+    const { possibleEsdlAssets } =
+      possibleAssets || (await this.loadPossibleAssets());
+    const esdlTracker = logger.progressStart({
+      id: 'Extracting possible enemy dsl assets...',
+      max: possibleEsdlAssets.length,
+    });
+
+    for (const [filePath, digest] of possibleEsdlAssets) {
+      esdlTracker.progress();
+      try {
+        await this.extractEnemyDslAndRelatedAssets(filePath);
+      } catch (err) {
+        console.log(err);
+      }
+    }
+
+    esdlTracker.end();
+  };
+
+  extractPossibleAudioAssets = async (possibleAssets) => {
+    const { possibleAudioAssets } =
+      possibleAssets || (await this.loadPossibleAssets());
 
     const audioTracker = logger.progressStart({
       id: 'Extracting audio assets...',
@@ -1467,8 +1567,9 @@ class WfExtractor {
     audioTracker.end();
   };
 
-  extractPossibleGeneralAmf3Assets = async () => {
-    const { possibleGeneralAmfAssets } = await this.loadPossibleAssets();
+  extractPossibleGeneralAmf3Assets = async (possibleAssets) => {
+    const { possibleGeneralAmfAssets } =
+      possibleAssets || (await this.loadPossibleAssets());
 
     await this.developWriteJson('general_amf.json', possibleGeneralAmfAssets);
 
@@ -1485,13 +1586,14 @@ class WfExtractor {
 
   extractPossibleImageAssets = async ({
     cropSprites,
-  }: { cropSprites: boolean } = {}) => {
+    possibleAssets,
+  }: { cropSprites: boolean; possibleAssets: any } = {}) => {
     const {
       possibleImageAssets,
       possibleImageAmfAssets,
       sprites,
       fileNameMap,
-    } = await this.loadPossibleAssets();
+    } = possibleAssets || (await this.loadPossibleAssets());
     const imageTracker = logger.progressStart({
       id: 'Extracting general image assets...',
       max: possibleImageAssets.length,
@@ -2395,6 +2497,65 @@ class WfExtractor {
     return decodedMsgPack.data.info.eventual_target_asset_version;
   };
 
+  extractEnemyDslAndRelatedAssets = async (dslPath) => {
+    const dslPathTests = ['.esdl.amf3', '.esdl.json', '.esdl'].reduce(
+      (acc, cur) => [...acc, `${dslPath}${cur}`, `${dslPath}${cur}.deflate`],
+      [dslPath]
+    );
+
+    let foundEnemyDsl;
+
+    for (const testPath of dslPathTests) {
+      const searchResult = await this.digestAndCheckFilePath(testPath);
+
+      if (searchResult) {
+        foundEnemyDsl = searchResult;
+        break;
+      }
+    }
+
+    if (!foundEnemyDsl) {
+      throw new Error('Enemy dsl not found from path.');
+    }
+
+    const { json } = await this.fileReader.readGeneralAndCreateOutput(
+      foundEnemyDsl[1],
+      foundEnemyDsl[0]
+    );
+
+    const meaingfulStrings = deepSearchUniqueMeaningfulStringsFromObject(json);
+
+    const possibleAssetPaths = meaingfulStrings.filter((string) =>
+      string.includes('/')
+    );
+
+    await this.loadAndExtractPossibleAssets(possibleAssetPaths, {
+      exclude: ['esdl'],
+      preventDoneLog: true,
+    });
+
+    const possibleActionDslPaths = meaingfulStrings
+      .filter((string) => !string.includes('/'))
+      .map((string) => `${json.bH}${string}${ACTION_DSL_FORMAT_DEFLATE}`);
+
+    const exportedDsl = await Promise.all(
+      possibleActionDslPaths.map(async (actionDslPath) => {
+        const foundActionDsl = await this.digestAndCheckFilePath(actionDslPath);
+
+        if (foundActionDsl) {
+          return this.fileReader.readGeneralAndCreateOutput(
+            foundActionDsl[1],
+            foundActionDsl[0]
+          );
+        }
+
+        return null;
+      })
+    );
+
+    return exportedDsl.filter((v) => v);
+  };
+
   development = async (debug) => {
     await this.init();
     await this.buildDigestFileMap();
@@ -2748,13 +2909,35 @@ class WfExtractor {
 
         return null;
       }
+      case /^enemyDsl .*/.test(debug): {
+        const destPath = debug.split(' ').pop();
+
+        await this.extractEnemyDslAndRelatedAssets(destPath);
+
+        return true;
+      }
       case /^(search) .*/.test(debug): {
-        const destPath = debug.split(' ').slice(1).join(' ');
+        const destPath = debug.split(' ').pop();
+        const args = debug.split(' ').slice(1, debug.split(' ').length - 1);
+
+        let customFormats = [];
+        let extract = false;
+
+        args.forEach((arg, idx) => {
+          if (/^-ff$|^-format$/.test(arg)) {
+            customFormats = args[idx + 1].split('|');
+          }
+          if (/^-e$|^-extract$/.test(arg)) {
+            extract = true;
+          }
+        });
 
         const searchTracker = logger.progressStart({
           id: 'Searching assets...',
           max: COMMON_FILE_FORMAT.length + 6,
         });
+
+        let isFound;
         for (const possibleFormat of [
           '.orderedmap',
           '.atlas.amf3',
@@ -2762,6 +2945,13 @@ class WfExtractor {
           '.frame.amf3',
           '.parts.amf3',
           '.atf',
+          '.action.dsl',
+          '.action.dsl.amf3',
+          '.action.dsl.json',
+          '.esdl.amf3',
+          '.esdl.json',
+          '.esdl',
+          ...customFormats,
           ...COMMON_FILE_FORMAT,
         ]) {
           searchTracker.progress();
@@ -2777,8 +2967,16 @@ class WfExtractor {
           if (digestFound) {
             logger.log(`Asset found at ${curDigestPath}`);
           }
+
+          if (found || digestFound) {
+            isFound = true;
+          }
         }
         searchTracker.end();
+
+        if (extract && isFound) {
+          await this.loadAndExtractPossibleAssets([destPath]);
+        }
 
         return null;
       }

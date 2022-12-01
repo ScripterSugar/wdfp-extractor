@@ -73,6 +73,7 @@ const PRESET_FAST = {
   processAtlasMisc: false,
   extractAudio: true,
   extractMiscImage: true,
+  extractEsdl: false,
 };
 
 const PRESET_FULL = {
@@ -84,6 +85,7 @@ const PRESET_FULL = {
   processAtlasMisc: true,
   extractAudio: true,
   extractMiscImage: true,
+  extractEsdl: true,
 };
 
 const AppMainLayout = styled.div`
@@ -316,6 +318,7 @@ const AppContent = () => {
       extractAudio: true,
       extractAllFrames: false,
       extractGeneralAmf: true,
+      extractEsdl: true,
       customPort: '',
       processAtlas: false,
       processAtlasMisc: false,
@@ -338,6 +341,7 @@ const AppContent = () => {
           extractAudio: true,
           extractAllFrames: false,
           extractGeneralAmf: true,
+          extractEsdl: true,
           customPort: '',
           processAtlas: false,
           processAtlasMisc: false,
@@ -1273,6 +1277,20 @@ const AppContent = () => {
                 onClick={() =>
                   options.processAtlasMisc &&
                   onChangeOptions('extractAllFrames', !options.extractAllFrames)
+                }
+              />
+            </LayoutFlexSpaceBetween>
+            <LayoutFlexSpaceBetween>
+              <LayoutFlexColumn>
+                <Typography>Extract ESDL assets</Typography>
+                <IndicatorTypo>
+                  Contains enemy sprites, action descriptor, etc.
+                </IndicatorTypo>
+              </LayoutFlexColumn>
+              <Switch
+                value={options.extractEsdl}
+                onClick={() =>
+                  onChangeOptions('extractEsdl', !options.extractEsdl)
                 }
               />
             </LayoutFlexSpaceBetween>

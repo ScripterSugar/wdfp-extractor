@@ -222,6 +222,7 @@ ipcMain.on(
       extractAudio,
       extractAllFrames,
       extractGeneralAmf,
+      extractEsdl,
       processAtlas,
       processAtlasMisc,
       parseActionScript,
@@ -344,6 +345,14 @@ ipcMain.on(
           }
 
           extractionPhase = 9;
+        }
+
+        if (extractionPhase <= 9) {
+          if (extractEsdl) {
+            await wfExtractor.extractPossibleEnemyDslAssets();
+          }
+
+          extractionPhase = 10;
         }
 
         await wfExtractor.saveConfirmedDigests();

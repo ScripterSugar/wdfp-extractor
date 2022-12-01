@@ -99,6 +99,21 @@ export const refineLs = (lsResult): Array<LSResult> => {
     .filter((val) => val);
 };
 
+export const deepSearchUniqueMeaningfulStringsFromObject = (obj, arr = []) => {
+  for (const prop in obj) {
+    if (obj.hasOwnProperty(prop)) {
+      if (typeof obj[prop] === 'object') {
+        deepSearchUniqueMeaningfulStringsFromObject(obj[prop], arr);
+      } else if (typeof obj[prop] === 'string') {
+        if (arr.indexOf(obj[prop]) === -1) {
+          arr.push(obj[prop]);
+        }
+      }
+    }
+  }
+  return arr;
+};
+
 export const withAsyncBandwidth = (
   array,
   asyncMapper,
