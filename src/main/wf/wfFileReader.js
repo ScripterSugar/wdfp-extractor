@@ -215,7 +215,7 @@ export default class WfFileReader {
   createGifFromFrames = async (
     targetFrames,
     destPath,
-    { delay: defaultDelay = 75, begin = 0 } = {}
+    { delay: defaultDelay = 75, begin = 0, animationScale = 2 } = {}
   ) => {
     try {
       let minX = Infinity;
@@ -239,6 +239,8 @@ export default class WfFileReader {
       });
       const refinedWidth = maxX - minX;
       const refinedHeight = maxY - minY;
+      const scaledWidth = refinedWidth * animationScale;
+      const scaledHeight = refinedHeight * animationScale;
       const refinedFrames = await Promise.all(
         targetFrames.map(async (image, idx) => {
           const { frame, fx = 0, fy = 0, w = 0, h = 0, frameId } = image;
@@ -256,8 +258,8 @@ export default class WfFileReader {
 
           const resized = await sharp(animationFrame)
             .resize({
-              width: refinedWidth * 2,
-              height: refinedHeight * 2,
+              width: scaledWidth,
+              height: scaledHeight,
               fit: 'inside',
               kernel: 'nearest',
             })
@@ -284,7 +286,7 @@ export default class WfFileReader {
           };
         })
       );
-      const encoder = new GifEncoder(refinedWidth * 2, refinedHeight * 2);
+      const encoder = new GifEncoder(scaledWidth, scaledHeight);
       encoder.pipe(fs.createWriteStream(destPath));
       encoder.setRepeat(0);
       encoder.setQuality(1);
@@ -317,6 +319,7 @@ export default class WfFileReader {
     images,
     destPath,
     delay,
+    animationScale,
     indexMode = 'saveName',
     maxIndex,
   }) => {
@@ -347,6 +350,7 @@ export default class WfFileReader {
 
     this.createGifFromFrames(targetFrames, `${destPath}/${name}.gif`, {
       delay,
+      animationScale,
       begin,
     });
   };
@@ -418,6 +422,7 @@ export default class WfFileReader {
     destPath: _destPath,
     generateGif,
     scale,
+    animationScale,
     extractAll = false,
     eliyaBot,
   } = {}) => {
@@ -597,7 +602,7 @@ export default class WfFileReader {
       await this.createGifFromFrames(
         (targetImages.length && targetImages) || images,
         dest,
-        gifOptions
+        { ...gifOptions, animationScale }
       );
     }
 

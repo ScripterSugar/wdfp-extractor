@@ -1121,6 +1121,7 @@ class WfExtractor {
       timelineRoot,
       extractAll,
       scale,
+      animationScale,
       cropProps = {},
     } = {}
   ) => {
@@ -1175,6 +1176,7 @@ class WfExtractor {
             sequence,
             destPath: `${spritePath}/animated`,
             delay: 100,
+            animationScale,
             indexMode,
             maxIndex: maxSequenceIndex,
           });
@@ -1185,14 +1187,23 @@ class WfExtractor {
     }
   };
 
-  animateCharacterSprite = async (character, { ignoreCache = false } = {}) => {
+  animateCharacterSprite = async (
+    character,
+    { ignoreCache = false, scale }: { ignoreCache: boolean; scale: number } = {
+      scale: 1,
+    }
+  ) => {
     if (
       !this.metadata.spriteProcessedLock?.includes(character) ||
       ignoreCache
     ) {
       await this.processSpritesByAtlases(
         `${this.ROOT_PATH}/output/assets/character/${character}/pixelart`,
-        { animate: true, extractAll: this.options.extractAllFrames }
+        {
+          animate: true,
+          extractAll: this.options.extractAllFrames,
+          animationScale: scale,
+        }
       );
       await this.markMetaData({
         spriteProcessedLock: [
@@ -1223,6 +1234,7 @@ class WfExtractor {
       await this.fileReader.cropSpritesFromAtlas({
         sprite: specialImage,
         atlases: specialAtlases,
+        animationScale: scale,
         destPath: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/special_sprite_sheet`,
         generateGif: `${this.ROOT_PATH}/output/assets/character/${character}/pixelart/animated/special.gif`,
       });
@@ -2738,10 +2750,14 @@ class WfExtractor {
         const args = debug.split(' ').slice(1);
 
         let character;
+        let scale = 2;
 
         args.forEach((arg, idx) => {
           if (/^-character$/.test(arg)) {
             character = args[idx + 1];
+          }
+          if (/^-scale$/.test(arg)) {
+            scale = parseFloat(args[idx + 1]);
           }
         });
 
@@ -2810,7 +2826,10 @@ class WfExtractor {
           );
         }
 
-        return this.animateCharacterSprite(character, { ignoreCache: true });
+        return this.animateCharacterSprite(character, {
+          ignoreCache: true,
+          scale,
+        });
       }
       case /^(sprite) .*/.test(debug): {
         const args = debug.split(' ').slice(1);
