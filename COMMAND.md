@@ -32,6 +32,11 @@ sprite -scale 16 character/battle_maid_xm19/pixelart/sprite_sheet
 
 
 ## search [assetpath]
+**-format \<.fileformat1|.fileformat2|...\>**
+**-ff \<.fileformat1|.fileformat2|...\>**              Specify file formats to be used within format search.
+
+**-extract**
+**-e**           If found, proceed to extract the asset found by path query.
 
 Search the asset hash and file formats if anything matches your path query. Useful if you want to find hidden master table files or assets.
 
@@ -69,6 +74,14 @@ Rename, decompile and export general asset from assetpath to output/asset direct
 
 #### Example:
 general battle/action/skill/action/rare5/hero_girl_vt22$hero_girl_vt22_2.action.dsl.amf3.deflate
+
+
+## enemyDsl [assetpath]
+
+search for the path if .esdl file exist. if exist, export all related assets with found .esdl file.
+
+#### Example:
+master master/ex_boost/odds/ability/alterite_r3_a.orderedmap
 
 
 ## exboost
