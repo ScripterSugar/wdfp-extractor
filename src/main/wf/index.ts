@@ -291,7 +291,7 @@ class WfExtractor {
     );
   };
 
-  init = async () => {
+  init = async ({ requireJava }: { requireJava?: boolean } = {}) => {
     logger.log('Initializing extraction process.');
 
     try {
