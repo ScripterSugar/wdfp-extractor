@@ -294,10 +294,12 @@ class WfExtractor {
   init = async ({ requireJava }: { requireJava?: boolean } = {}) => {
     logger.log('Initializing extraction process.');
 
-    try {
-      await asyncExec('java -version');
-    } catch (err) {
-      throw new Error('JAVA_NOT_INSTALLED');
+    if (requireJava) {
+      try {
+        await asyncExec('java -version');
+      } catch (err) {
+        throw new Error('JAVA_NOT_INSTALLED');
+      }
     }
 
     if (!fs.existsSync(METADATA_PATH(this.ROOT_PATH))) {
@@ -327,7 +329,7 @@ class WfExtractor {
     }
   };
 
-  selectDevice = async (deviceId) => {
+  selectDevice = async (deviceId?: string) => {
     logger.log('scanning connected devices.');
 
     if (deviceId) {
@@ -1190,7 +1192,7 @@ class WfExtractor {
   animateCharacterSprite = async (
     character,
     { ignoreCache = false, scale }: { ignoreCache: boolean; scale: number } = {
-      scale: 1,
+      scale: 2,
     }
   ) => {
     if (
@@ -2307,31 +2309,53 @@ class WfExtractor {
       let extractionIndex = 0;
 
       await Promise.all(
-        withAsyncBandwidth(targetAssetList, async (asset, currentIndex) => {
-          const { location, size } = asset;
-          let refinedLocation = location;
+        withAsyncBandwidth(
+          targetAssetList,
+          async (asset, currentIndex) => {
+            const { location, size } = asset;
+            let refinedLocation = location;
 
-          if (this.region === 'gl') {
-            refinedLocation = location.replace('{$cdnAddress}', cdn);
-          }
-          try {
-            const downloadedZip = await (await fetch(refinedLocation)).buffer();
-
-            while (extractionIndex !== currentIndex) {
-              await sleep(50);
+            if (this.region === 'gl') {
+              refinedLocation = location.replace('{$cdnAddress}', cdn);
             }
-            new AdmZip(downloadedZip).extractAllTo(
-              `${this.ROOT_PATH}/dump`,
-              true
-            );
-          } catch (err) {
-            console.log(err);
-          } finally {
-            extractionIndex += 1;
-          }
+            try {
+              let downloadedZip;
+              let trialCount = 0;
 
-          assetTracker.progress(Math.round(size / 1024));
-        })
+              while (!downloadedZip && trialCount < 5) {
+                try {
+                  downloadedZip = await (await fetch(refinedLocation)).buffer();
+                } catch (err: any) {
+                  logger.devLog(err.message);
+                  logger.devLog(
+                    `Failed to download asset, retrying ${trialCount + 1}/5...`
+                  );
+                  trialCount += 1;
+                  await sleep(100);
+                }
+              }
+
+              if (!downloadedZip) {
+                throw new Error(`Failed to download asset: ${refinedLocation}`);
+              }
+
+              while (extractionIndex !== currentIndex) {
+                await sleep(50);
+              }
+              new AdmZip(downloadedZip).extractAllTo(
+                `${this.ROOT_PATH}/dump`,
+                true
+              );
+            } catch (err) {
+              console.log(err);
+            } finally {
+              extractionIndex += 1;
+            }
+
+            assetTracker.progress(Math.round(size / 1024));
+          },
+          { bandwidth: 3 }
+        )
       );
 
       assetTracker.end();

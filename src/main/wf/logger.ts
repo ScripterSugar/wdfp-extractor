@@ -80,7 +80,7 @@ class Logger {
           },
         });
       },
-      end: (preventLog) => {
+      end: (preventLog = false) => {
         this.data({
           type: 'progressEnd',
           data: {
