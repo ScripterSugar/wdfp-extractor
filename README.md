@@ -1,8 +1,6 @@
 # World Filpper Asset Extractor
 
-
 [![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://stand-with-ukraine.pp.ua)
-
 
 #### DISCLAIMER: All the rights of extracted assets belong to cygames/citail and/or its affiliates. Do not share the files extracted by the tool. I do not encourage you to use any of extracted assets in inappropriate purpose. If you use any assets extracted by this tool, you do so at your sole risk.
 
@@ -10,7 +8,7 @@ Asset Extraction tool for World Flipper.
 
 This tool extracts the assets from world flipper application installed on your device / emulator using ADB and FFDEC, rename digested file paths with original file path, restore corrupted png and mp3 data, export irregular (amf, orderedmap, etc) files in regular data format such as json.
 
-Currently only supports Global / Japan variants. 
+Currently only supports Global / Japan variants.
 
 ## Installation
 
@@ -18,11 +16,11 @@ Check out the [release page of this repo](https://github.com/ScripterSugar/wdfp-
 
 ## Requirements
 
-Currently only supports Windows (recommended 10 or higher)
+Runs on Windows, Mac or Linux machines.
 
 #### Pulling from API
 
-Some regions may not be able to call asset download api (For example, KR/CN Ips are banned from JP api server.) If you have trouble pulling assets from API, consider using VPN to call those APIs 
+Some regions may not be able to call asset download api (For example, KR/CN Ips are banned from JP api server.) If you have trouble pulling assets from API, consider using VPN to call those APIs
 
 #### Pulling from devices/emulator
 
@@ -43,10 +41,12 @@ The tool only tested for limited use cases, thus should have various bugs or eve
 To use this tool, your device should at least have file-listing access to the /data directory.
 
 #### Using Emulator
+
 - Nox player (version 7.0.x) - **Recommended (Global)**
 - Bluestacks 5 (Not recommended - bad performance due to unabled adbd root access.)
 
 #### Using Real device
+
 - Pixel 2 (Android 11)
 - Pixel 4 XL (Android 12)
 
@@ -66,7 +66,6 @@ Click on the `Pull/Downlaod Assets` and select the asset source, region variant 
 
 When using your device or emulator, The device must downloaded all the assets from world flipper client before you use this tool.
 
-
 #### Extract assets
 
 ![image](https://user-images.githubusercontent.com/19164553/179390928-5cc9a112-edba-4234-b33a-dd42c5ddc674.png)
@@ -76,7 +75,6 @@ Once you pulled raw assets successfully, click on the `Extract Data` button and 
 Once the extraction is done, you can find inflated asset files located in the output directory under your extraction directory.
 
 **Do not close the app even if it hangs. The process might hangs a lot and several tasks require more than dozens of minutes. Be patient while extraction is in progress**
-
 
 #### Delta extraction
 
@@ -101,8 +99,8 @@ Refer to the [FAQ for more details](FAQ.md).
 
 Thanks to @michaelcurry for the documentation.
 
-
 ## Supported Assets
+
 - APK
 - Decompiled SWF
 - Master table
@@ -116,10 +114,12 @@ Thanks to @michaelcurry for the documentation.
 - Summarized Gacha, EX Boost rates table.
 
 ## Planned feature
+
 - Support extraction of ability texts
 - Data viewer
 
 ## Known issues
+
 The repository is open to your contribution! if you're having problem with the issues that listed here, feel free to open PRs to resolve it and make other pepople can benefit from your contribution.
 
 - Whitespaces in Windows user name / extraction directory path causing crashes on extraction process. (Due date: TBD)
@@ -131,7 +131,4 @@ I won't actively troubleshoot the bugs as far as it works for me, so if you're h
 If you want more asset coverage added to tool, please provide the details about assets you want to export, including file formats, asset path, format of data, etc.
 
 The application is built from the [electron-react-boilerplate](https://github.com/electron-react-boilerplate/electron-react-boilerplate). Refer to the repository to check how to install dependencies and start development on your local machine.
-
-
-
 
