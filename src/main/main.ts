@@ -71,18 +71,18 @@ ipcMain.on('clearMeta', async (event, rootDir, targetData) => {
 });
 
 class ExtractionProcessor {
-  packetResolver: (any) => void;
+  packetResolver = (data: string) => {};
 
-  awaitNextPacket = () => {
+  awaitNextPacket = (): Promise<string> => {
     return new Promise((resolve) => {
       this.packetResolver = resolve;
     });
   };
 
-  resolveAwait = (data) => {
+  resolveAwait = (data: string) => {
     if (this.packetResolver) {
       this.packetResolver(data);
-      this.packetResolver = null;
+      this.packetResolver = () => {};
     }
   };
 }
@@ -122,7 +122,7 @@ ipcMain.on(
       deltaMode,
     }
   ) => {
-    let replyPacket;
+    let replyPacket = '';
     let extractionPhase = 0;
 
     const wfExtractor = new WfExtractor({
@@ -143,7 +143,7 @@ ipcMain.on(
       }
       try {
         if (extractionPhase <= 0) {
-          await wfExtractor.init();
+          await wfExtractor.init({ requireJava: variant === 'device' });
           extractionPhase = 1;
         }
 
