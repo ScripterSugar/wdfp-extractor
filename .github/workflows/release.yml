@@ -13,12 +13,10 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: 16
-    - name: Install cross-env
-      run: yarn global add cross-env
     - name: Install dependencies
       run: yarn install --network-timeout 600000
     - name: Build and publish to github release.
-      run: cross-env GH_TOKEN=${{ secrets.GH_TOKEN }}yarn deploy
+      run: npx cross-env GH_TOKEN=${{ secrets.GH_TOKEN }} yarn deploy
   build-linux:
     runs-on: ubuntu-latest
     steps:
@@ -27,12 +25,10 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: 16
-    - name: Install cross-env
-      run: yarn global add cross-env
     - name: Install dependencies
       run: yarn install --network-timeout 600000
     - name: Build and publish to github release.
-      run: cross-env GH_TOKEN=${{ secrets.GH_TOKEN }}yarn deploy
+      run: npx cross-env GH_TOKEN=${{ secrets.GH_TOKEN }} yarn deploy
   build-macos:
     runs-on: macos-latest
     steps:
@@ -41,9 +37,7 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: 16
-    - name: Install cross-env
-      run: yarn global add cross-env
     - name: Install dependencies
       run: yarn install --network-timeout 600000
     - name: Build and publish to github release.
-      run: cross-env GH_TOKEN=${{ secrets.GH_TOKEN }}yarn deploy
+      run: npx cross-env GH_TOKEN=${{ secrets.GH_TOKEN }} yarn deploy
