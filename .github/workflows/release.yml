@@ -40,7 +40,7 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v4.5.0
       with:
-        python-version: 2.7
+        python-version: 3
     - name: Install dependencies
       run: yarn install --network-timeout 600000
     - name: Build and publish to github release.
