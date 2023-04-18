@@ -1,6 +1,6 @@
 {
   "name": "wdfp-extractor",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "World Flipper asset extractor.",
   "main": "./dist/main/main.js",
   "author": {
@@ -19,3 +19,4 @@
   },
   "license": "MIT"
 }
+
