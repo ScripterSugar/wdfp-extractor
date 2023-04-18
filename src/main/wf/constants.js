@@ -151,7 +151,7 @@ export const BASE_ODD_MAP = {
   5: 0.05,
 };
 
-export const POSSIBLE_PATH_REGEX = /[.$a-zA-Z_0-9]+?\/[.$a-zA-Z_0-9/]+/g;
+export const POSSIBLE_PATH_REGEX = /[.$a-zA-Z_0-9-]+?\/[.$a-zA-Z_0-9/-]+/g;
 
 export const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 
