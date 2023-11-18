@@ -402,7 +402,7 @@ const AppContent = () => {
     return setPullOptions({
       ...pullOptions,
       ...((key === 'regionVariant' &&
-        ['kr', 'en'].includes(value) && { region: 'gl' }) || { region: 'jp' }),
+        ['kr', 'en'].includes(value) && { region: 'gl' }) || { region: value }),
       ...(key === 'regionVariant' && {
         baseVersion: meta?.[`${value}LatestApiAssetVersion`] || '',
       }),
@@ -703,7 +703,7 @@ const AppContent = () => {
       ...pullOptions,
       deltaMode: deltaMode && 'latest',
       region:
-        (['en', 'kr'].includes(pullOptions.regionVariant) && 'gl') || 'jp',
+        (['en', 'kr'].includes(pullOptions.regionVariant) && 'gl') || pullOptions.regionVariant,
     });
 
     let ipcResponse;
@@ -926,7 +926,9 @@ const AppContent = () => {
               disabled={
                 !meta.jpLatestApiAssetVersion &&
                 !meta.krLatestApiAssetVersion &&
-                !meta.enLatestApiAssetVersion
+                !meta.enLatestApiAssetVersion &&
+                !meta.twLatestApiAssetVersion &&
+                !meta.cnLatestApiAssetVersion
               }
               onClick={() => {
                 if (!deltaMode) {
@@ -1526,6 +1528,18 @@ const AppContent = () => {
             onClick={() => onChangePullOptions('regionVariant', 'jp')}
           >
             JP
+          </WfSelectButton>
+          <WfSelectButton
+            data-selected={pullOptions.regionVariant === 'tw'}
+            onClick={() => onChangePullOptions('regionVariant', 'tw')}
+          >
+            TW
+          </WfSelectButton>
+          <WfSelectButton
+            data-selected={pullOptions.regionVariant === 'cn'}
+            onClick={() => onChangePullOptions('regionVariant', 'cn')}
+          >
+            CN
           </WfSelectButton>
         </ModalActions>
         <ModalActions style={{ marginTop: 48 }}>
