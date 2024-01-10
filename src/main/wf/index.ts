@@ -50,11 +50,15 @@ const API_PATHS = {
     jp: 'https://api.worldflipper.jp/latest/api/index.php',
     en: 'https://na.wdfp.kakaogames.com/latest/api/index.php',
     kr: 'https://kr.wdfp.kakaogames.com/latest/api/index.php',
+    tw: 'https://wf-game.worldflipper.beanfun.com/latest/api/index.php',
+    cn: 'https://shijtswygamegf.leiting.com/api/index.php',
   },
   asset: {
     jp: 'https://api.worldflipper.jp/latest/api/index.php/gacha/exec',
     en: 'https://na.wdfp.kakaogames.com/latest/api/index.php/gacha/exec',
     kr: 'https://kr.wdfp.kakaogames.com/latest/api/index.php/gacha/exec',
+    tw: 'https://wf-game.worldflipper.beanfun.com/latest/api/index.php/gacha/exec',
+    cn: 'https://shijtswygamegf.leiting.com/api/index.php/gacha/exec',
   },
   cdn: {
     en: 'http://patch.wdfp.kakaogames.com/Live/2.0.0',
@@ -202,9 +206,9 @@ class WfExtractor {
 
   ADB_ROOT = false;
 
-  region: 'gl' | 'jp';
+  region: 'gl' | 'jp' | 'tw' | 'cn';
 
-  regionVariant: 'en' | 'kr' | 'jp';
+  regionVariant: 'en' | 'kr' | 'jp' | 'tw' | 'cn';
 
   APK_NAME_KEY = {
     gl: 'wdfp',
