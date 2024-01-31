@@ -247,7 +247,7 @@ ipcMain.on(
       const start = new Date().getTime();
       try {
         logger.log(`Executing command ${debug}`);
-        await wfExtractor.development(debug);
+        await wfExtractor.executeCommand(debug);
       } catch (err) {
         console.log(err);
         logger.log(`Error executing command ${debug}`);

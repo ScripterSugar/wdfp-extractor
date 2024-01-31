@@ -15,6 +15,8 @@ module.exports = {
     'no-continue': 'off',
     'jsx-a11y/anchor-is-valid': 'off',
     'react/jsx-props-no-spreading': 'off',
+    'no-bitwise': 'off',
+    'no-plusplus': 'off',
     'jsx-a11y/no-noninteractive-element-interactions': 'off',
     '@typescript-eslint/no-loop-func': 'off',
     'prettier/prettier': [

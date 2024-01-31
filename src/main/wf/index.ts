@@ -9,7 +9,16 @@ import fetch from 'node-fetch';
 import msgpack from 'msgpack-lite';
 import { app } from 'electron';
 import { ChildProcess, spawn } from 'child_process';
-import { access, mkdir, readdir, readFile, stat, writeFile } from 'fs/promises';
+import {
+  access,
+  copyFile,
+  mkdir,
+  readdir,
+  readFile,
+  stat,
+  writeFile,
+} from 'fs/promises';
+import PartsAnimationSource from '../flatomo/partsAnimationSource';
 import WfFileReader from './wfFileReader';
 import logger from './logger';
 import { LSResult, WFExtractorMetaData } from './typedefs';
@@ -28,6 +37,7 @@ import {
 } from './helpers';
 import {
   ACTION_DSL_FORMAT_DEFLATE,
+  ANIMATION_COMMON_POSTFIXES,
   BASE_ODD_MAP,
   CHARACTER_AMF_PRESERTS,
   CHARACTER_SPRITE_PRESETS,
@@ -920,7 +930,7 @@ class WfExtractor {
     for (const [fileName, digest] of characterImageDigests) {
       digestTracker.progress();
       const filePath = await this.fileReader.checkDigestPath(digest);
-        if (!filePath) continue; // eslint-disable-line
+      if (!filePath) continue; // eslint-disable-line
       characterImagePaths.push([fileName, filePath]);
     }
     digestTracker.end();
@@ -973,7 +983,7 @@ class WfExtractor {
     for (const [fileName, digest] of characterImageDigests) {
       digestTracker.progress();
       const filePath = await this.fileReader.checkDigestPath(digest);
-        if (!filePath) continue; // eslint-disable-line
+      if (!filePath) continue; // eslint-disable-line
       characterImagePaths.push([fileName, filePath]);
     }
     digestTracker.end();
@@ -1088,7 +1098,7 @@ class WfExtractor {
 
     for (const [fileName, digest] of characterAmfDigests) {
       const filePath = await this.fileReader.checkDigestPath(digest);
-        if (!filePath) continue; // eslint-disable-line
+      if (!filePath) continue; // eslint-disable-line
       characterAmfPaths.push([fileName, filePath]);
     }
 
@@ -1135,6 +1145,7 @@ class WfExtractor {
       const timelineName = timelineRoot || 'pixelart';
 
       const spriteImage = await asyncReadFile(`${spritePath}/${sheetName}.png`);
+
       const spriteAtlases = JSON.parse(
         (
           await asyncReadFile(`${spritePath}/${sheetName}.atlas.json`)
@@ -2601,7 +2612,7 @@ class WfExtractor {
     return exportedDsl.filter((v) => v);
   };
 
-  development = async (debug) => {
+  executeCommand = async (debug) => {
     await this.init();
     await this.buildDigestFileMap();
     // await this.extractMasterTable();
@@ -2628,71 +2639,6 @@ class WfExtractor {
     }
 
     switch (true) {
-      case /^fetchComics/.test(debug): {
-        const args = debug.split(' ').slice(1);
-        let regionVariant = 'jp';
-        args.forEach((arg, idx) => {
-          if (/^-region$/.test(arg)) {
-            regionVariant = args[idx + 1];
-          }
-        });
-        const latestAssetVersion = await this.fetchLatestAssetVersion({
-          regionVariant,
-        });
-
-        const comicListIndex = 5;
-
-        const fetchUrl = `${API_PATHS.host[regionVariant]}/comic/get_list`;
-        const fetchOptions = {
-          method: 'post',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            RES_VER: latestAssetVersion,
-            APP_VER: '0.0.45',
-            ...(regionVariant !== 'jp' && {
-              DEVICE_LANG: (regionVariant === 'en' && 'en') || 'ko',
-            }),
-            PARAM: '7b382ac98c21bac8be9be9de25d8d9b2525984fd',
-            UDID: 'BC51B46F-B7D5-49C3-A651-62D255A49C8471D9',
-            DEVICE: '2',
-          },
-          body: (
-            await msgpack.encode({
-              page_index: comicListIndex,
-              kind: 0,
-              viewer_id: 885870369,
-            })
-          ).toString('base64'),
-        };
-
-        //   await (await (fetch('https://kr.wdfp.kakaogames.com/latest/api/index.php/comic/get_list', {
-        //    method: 'post',
-        //    headers: {
-        //        'Content-Type': 'application/x-www-form-urlencoded',
-        //        RES_VER: '2.0.51',
-        //        APP_VER: '0.0.45',
-        //        DEVICE_LANG: 'ko',
-        //        PARAM: '7b382ac98c21bac8be9be9de25d8d9b2525984fd',
-        //        UDID: 'BC51B46F-B7D5-49C3-A651-62D255A49C8471D9',
-        //        DEVICE: '2',
-        //      },
-        //    body: 'g6pwYWdlX2luZGV4BqRraW5kAKl2aWV3ZXJfaWTONM1PIQ==',
-        //  }))).text()
-
-        console.log(fetchUrl, fetchOptions);
-
-        const fetchedResult = await (
-          await fetch(fetchUrl, fetchOptions)
-        ).text();
-        console.log(fetchedResult);
-
-        const comicResponse = await msgpack.decode(
-          Buffer.from(fetchedResult, 'base64')
-        );
-        console.log(comicResponse);
-
-        return null;
-      }
       case /fetchAssets/.test(debug): {
         const args = debug.split(' ').slice(1);
         await this.fetchAssetsFromApi(args[0]);
@@ -2777,50 +2723,93 @@ class WfExtractor {
       case /^(animate) .*/.test(debug): {
         const args = debug.split(' ').slice(1);
 
-        let character;
+        let character: string | undefined;
+        let generalPath: string | undefined;
+        let sheetName = 'sprite_sheet';
         let scale = 2;
+        let atlasName = 'sprite_sheet';
+        let timelineName = 'pixelart';
+        let specialAtlasName = 'special_sprite_sheet';
+        let specialTimelineName = 'special';
 
         args.forEach((arg, idx) => {
-          if (/^-character$/.test(arg)) {
+          if (/^-character$|^-C$/.test(arg)) {
             character = args[idx + 1];
+          }
+          if (/^-general$|^-G$/.test(arg)) {
+            generalPath = args[idx + 1];
           }
           if (/^-scale$/.test(arg)) {
             scale = parseFloat(args[idx + 1]);
           }
+          if (/^-sheetName$/.test(arg)) {
+            sheetName = args[idx + 1];
+          }
+          if (/^-atlasName$/.test(arg)) {
+            atlasName = args[idx + 1];
+          }
+          if (/^-timelineName$/.test(arg)) {
+            timelineName = args[idx + 1];
+          }
+          if (/^-specialAtlasName$/.test(arg)) {
+            specialAtlasName = args[idx + 1];
+          }
+          if (/^-specialTimelineName$/.test(arg)) {
+            specialTimelineName = args[idx + 1];
+          }
+          if (/^-metaName$/.test(arg)) {
+            sheetName = args[idx + 1];
+            atlasName = args[idx + 1];
+            timelineName = args[idx + 1];
+            specialAtlasName = args[idx + 1];
+            specialTimelineName = args[idx + 1];
+          }
         });
 
-        if (!character) {
+        if (!character && !generalPath) {
           return logger.log(
-            'Invalid parameter. Available args: -character [characterName]'
+            'Invalid parameter. -character (-C) [characterName] or -general (-G) [path] required.'
           );
         }
 
-        const characters = await this.getCharacterList();
+        let targetPath;
 
-        if (!characters.includes(character)) {
-          return logger.log(`Character ${character} not found.`);
+        if (character) {
+          const characters = await this.getCharacterList();
+
+          if (!characters.includes(character)) {
+            return logger.log(`Character ${character} not found.`);
+          }
+
+          targetPath = `character/${character}/pixelart`;
         }
+        if (generalPath) {
+          targetPath = generalPath;
+        }
+
         const foundPng = await this.digestAndCheckFilePath(
-          `character/${character}/pixelart/sprite_sheet.png`
+          `${targetPath}/${sheetName}.png`
         );
+
         if (!foundPng) {
           logger.log('Image not found.');
           return null;
         }
+
         const foundAtlas = await this.digestAndCheckFilePath(
-          `character/${character}/pixelart/sprite_sheet.atlas.amf3.deflate`
+          `${targetPath}/${atlasName}.atlas.amf3.deflate`
         );
         const foundTimeline = await this.digestAndCheckFilePath(
-          `character/${character}/pixelart/pixelart.timeline.amf3.deflate`
+          `${targetPath}/${timelineName}.timeline.amf3.deflate`
         );
         const foundSpecialPng = await this.digestAndCheckFilePath(
-          `character/${character}/pixelart/special_sprite_sheet.png`
+          `${targetPath}/special_sprite_sheet.png`
         );
         const foundSpecialAtlas = await this.digestAndCheckFilePath(
-          `character/${character}/pixelart/special_sprite_sheet.atlas.amf3.deflate`
+          `${targetPath}/${specialAtlasName}.atlas.amf3.deflate`
         );
         const foundSpecialTimeline = await this.digestAndCheckFilePath(
-          `character/${character}/pixelart/special.timeline.amf3.deflate`
+          `${targetPath}/${specialTimelineName}.timeline.amf3.deflate`
         );
         if (!foundAtlas) {
           logger.log('Atlas not found.');
@@ -2854,10 +2843,27 @@ class WfExtractor {
           );
         }
 
-        return this.animateCharacterSprite(character, {
-          ignoreCache: true,
-          scale,
-        });
+        if (character) {
+          await this.animateCharacterSprite(character, {
+            ignoreCache: true,
+            scale,
+          });
+        }
+
+        if (generalPath) {
+          await this.processSpritesByAtlases(
+            `${this.ROOT_PATH}/output/assets/${generalPath}`,
+            {
+              extractAll: true,
+              animationScale: scale,
+              timelineRoot: timelineName,
+              sheetName,
+              animate: true,
+            }
+          );
+        }
+
+        return null;
       }
       case /^(sprite) .*/.test(debug): {
         const args = debug.split(' ').slice(1);
@@ -3059,12 +3065,338 @@ class WfExtractor {
           }
         }
       }
+      case /^decompileSwf$/.test(debug): {
+        return this.decompileAndExportSwf();
+      }
+      case /^animateBoss .*/.test(debug): {
+        const args = debug.split(' ').slice(1);
+
+        let spritePath = '';
+        let metaName;
+        let scale;
+        let frameMs;
+        let mergeGroupAnimation = false;
+        let mergeLoopAmount = 8;
+        let mergeChargeAmount = 3;
+
+        args.forEach((arg, idx) => {
+          if (/^-scale$/.test(arg)) {
+            scale = parseFloat(args[idx + 1] || 1);
+          }
+          if (/^-sprite$/.test(arg)) {
+            spritePath = args[idx + 1];
+          }
+          if (/^-meta$/.test(arg)) {
+            metaName = args[idx + 1];
+          }
+          if (/^-frameMs$/.test(arg)) {
+            frameMs = parseFloat(args[idx + 1] || 16);
+          }
+          if (/^-merge$/.test(arg)) {
+            mergeGroupAnimation = true;
+          }
+          if (/^-mergeLoopAmount$/.test(arg)) {
+            mergeLoopAmount = parseFloat(args[idx + 1] || 8);
+          }
+          if (/^-mergeChargeAmount$/.test(arg)) {
+            mergeChargeAmount = parseFloat(args[idx + 1] || 3);
+          }
+        });
+
+        if (!spritePath) {
+          return logger.log('Invalid parameter. -sprite (-S) [path] required.');
+        }
+
+        if (metaName) {
+          await this.processBossSpritesWithParts({
+            spritePath,
+            metaName,
+            scale,
+            frameMs,
+            mergeLoopAmount,
+            mergeGroupAnimation,
+            mergeChargeAmount,
+          });
+        } else {
+          const targetDir = `${this.ROOT_PATH}/output/assets/${spritePath
+            .split('/')
+            .slice(0, -1)
+            .join('/')}`;
+          // find all files that ends with .parts.json within target directory
+
+          const foundParts = await readdir(targetDir);
+
+          const partsFiles = foundParts.filter((file) =>
+            file.endsWith('.parts.json')
+          );
+
+          let images;
+          for (const partsFile of partsFiles) {
+            console.log('Processing', partsFile.replace('.parts.json', ''));
+            images = await this.processBossSpritesWithParts({
+              spritePath,
+              metaName: partsFile.replace('.parts.json', ''),
+              scale,
+              frameMs,
+              mergeLoopAmount,
+              mergeGroupAnimation,
+              mergeChargeAmount,
+              prebuiltImages: images as any[],
+            });
+          }
+        }
+
+        return null;
+      }
       default: {
         return logger.log(`Command not found: ${debug.split(' ')[0]}`);
       }
     }
 
     return true;
+  };
+
+  processBossSpritesWithParts = async ({
+    spritePath,
+    metaName,
+    scale = 1,
+    frameMs = 16,
+    mergeGroupAnimation = false,
+    mergeLoopAmount = 8,
+    mergeChargeAmount = 3,
+    prebuiltImages,
+  }: {
+    spritePath: string;
+    metaName?: string;
+    scale?: number;
+    frameMs?: number;
+    mergeGroupAnimation?: boolean;
+    mergeLoopAmount: number;
+    mergeChargeAmount: number;
+    prebuiltImages?: any[];
+  }) => {
+    const destPath = `${this.ROOT_PATH}/output/assets/${spritePath
+      .split('/')
+      .slice(0, -1)
+      .join('/')}`;
+    const bossName = spritePath.split('/').pop();
+
+    const partsFile = await asyncReadFile(
+      `${destPath}/${metaName || bossName}.parts.json`
+    );
+
+    const partsData = JSON.parse(partsFile.toString());
+
+    const animationSource = new PartsAnimationSource(partsData);
+
+    const imageSortMatrix = animationSource.images;
+
+    const sortedImages = [];
+
+    const spriteAtlases = JSON.parse(
+      (await asyncReadFile(`${destPath}/${bossName}.atlas.json`)).toString()
+    );
+
+    const spriteImage = await asyncReadFile(`${destPath}/${bossName}.png`);
+
+    const images =
+      prebuiltImages ||
+      (await this.fileReader.cropSpritesFromAtlas({
+        sprite: spriteImage,
+        atlases: spriteAtlases,
+        destPath: `${destPath}`,
+      }));
+
+    for (let frameIdx = 0; frameIdx < imageSortMatrix.length; frameIdx += 1) {
+      const frame = imageSortMatrix[frameIdx].p;
+
+      const sortedImage = images.find((image) => image.n === frame);
+
+      sortedImages.push(sortedImage);
+    }
+
+    let timeline;
+
+    try {
+      timeline = JSON.parse(
+        (
+          await asyncReadFile(
+            `${destPath}/${metaName || bossName}.timeline.json`
+          )
+        ).toString()
+      );
+    } catch (err) {
+      console.log(err, `${destPath}/${metaName || bossName}.timeline.json`);
+      return null;
+    }
+    await asyncMkdir(`${destPath}/animated${metaName ? `/${metaName}` : ''}`, {
+      recursive: true,
+    });
+
+    function referenceFinalFrame(graphic: any, frameIdx: number) {
+      const currentFrame = graphic.frames[frameIdx];
+
+      if (!currentFrame) {
+        return null;
+      }
+
+      if (currentFrame.indexForPath === 0) {
+        return currentFrame;
+      }
+
+      if (
+        animationSource.graphics[currentFrame.id] &&
+        animationSource.graphics[currentFrame.id].frames[
+          currentFrame.referencingFrame
+        ]
+      ) {
+        return referenceFinalFrame(
+          animationSource.graphics[currentFrame.id],
+          currentFrame.referencingFrame
+        );
+      }
+
+      logger.log(
+        `Can't reference final frame for graphicId ${currentFrame.id}, frame number ${currentFrame.referencingFrame}`
+      );
+
+      return null;
+    }
+
+    let currentGroup: {
+      groupPrefix: string;
+      groupSequences: string[];
+      groupFrames: any[];
+      groupDelays: number[];
+    } = {
+      groupPrefix: '',
+      groupSequences: [],
+      groupFrames: [],
+      groupDelays: [],
+    };
+
+    const progressTracker = logger.progressStart({
+      id: `Generating ${metaName || bossName} animation GIFs...`,
+      max: timeline.sequences.length,
+    });
+
+    for (const sequence of timeline.sequences) {
+      console.log(sequence);
+      const { begin, end, name } = sequence;
+      const sequencePrefix = name
+        .split('_')
+        .filter((value: any) => !ANIMATION_COMMON_POSTFIXES.includes(value))
+        .join('_');
+
+      const frameDelays: number[] = [];
+      const frameIndexes: number[] = [];
+
+      for (let frameIdx = begin - 1; frameIdx < end; frameIdx += 1) {
+        const finalFrame = referenceFinalFrame(
+          animationSource.graphics[0],
+          frameIdx
+        );
+
+        if (!finalFrame) continue;
+
+        if (frameIndexes.at(-1) !== finalFrame.id) {
+          frameIndexes.push(finalFrame.id);
+          frameDelays.push(0);
+        } else {
+          frameDelays[frameDelays.length - 1] += 1;
+        }
+      }
+
+      const targetFrames = frameIndexes.map(
+        (frameIndex) => sortedImages[frameIndex]
+      );
+
+      if (targetFrames.filter((v) => v).length === 0) {
+        continue;
+      }
+
+      const timeAppliedDelayMap = frameDelays.map((delay) => delay * frameMs);
+
+      progressTracker.progress();
+      console.log(
+        `Generating ${name}.gif for frames index ${frameIndexes} with delay map of ${timeAppliedDelayMap}`
+      );
+
+      await this.fileReader.createGifFromFrames(
+        targetFrames,
+        `${destPath}/animated${metaName ? `/${metaName}` : ''}/${name}.gif`,
+        {
+          animationScale: scale,
+          delayMap: timeAppliedDelayMap,
+        }
+      );
+
+      if (mergeGroupAnimation) {
+        if (sequencePrefix !== currentGroup.groupPrefix) {
+          if (currentGroup.groupSequences.length > 1) {
+            await this.fileReader.createGifFromFrames(
+              currentGroup.groupFrames,
+              `${destPath}/animated${metaName ? `/${metaName}` : ''}/${
+                currentGroup.groupPrefix
+              }_merged.gif`,
+              {
+                animationScale: scale,
+                delayMap: currentGroup.groupDelays,
+              }
+            );
+
+            logger.log(
+              `generating merged animation group ${currentGroup.groupPrefix}_merged.gif for sequences ${currentGroup.groupSequences}`
+            );
+          }
+
+          currentGroup = {
+            groupPrefix: sequencePrefix,
+            groupSequences: [name],
+            groupFrames: targetFrames,
+            groupDelays: timeAppliedDelayMap,
+          };
+        } else {
+          currentGroup.groupSequences.push(name);
+
+          if (/loop$/.test(name)) {
+            for (let i = 0; i < mergeLoopAmount; i += 1) {
+              currentGroup.groupFrames.push(...targetFrames);
+              currentGroup.groupDelays.push(...timeAppliedDelayMap);
+            }
+          } else if (/charge$/.test(name)) {
+            for (let i = 0; i < mergeChargeAmount; i += 1) {
+              currentGroup.groupFrames.push(...targetFrames);
+              currentGroup.groupDelays.push(...timeAppliedDelayMap);
+            }
+          } else {
+            currentGroup.groupFrames.push(...targetFrames);
+            currentGroup.groupDelays.push(...timeAppliedDelayMap);
+          }
+        }
+      }
+    }
+
+    if (mergeGroupAnimation && currentGroup.groupSequences.length > 1) {
+      await this.fileReader.createGifFromFrames(
+        currentGroup.groupFrames,
+        `${destPath}/animated${metaName ? `/${metaName}` : ''}/${
+          currentGroup.groupPrefix
+        }_merged.gif`,
+        {
+          animationScale: scale,
+          delayMap: currentGroup.groupDelays,
+        }
+      );
+
+      logger.log(
+        `generating merged animation group ${currentGroup.groupPrefix}_merged.gif for sequences ${currentGroup.groupSequences}`
+      );
+    }
+
+    progressTracker.end();
+
+    return sortedImages;
   };
 
   close = async () => {

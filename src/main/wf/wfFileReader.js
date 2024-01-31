@@ -215,7 +215,7 @@ export default class WfFileReader {
   createGifFromFrames = async (
     targetFrames,
     destPath,
-    { delay: defaultDelay = 75, begin = 0, animationScale = 2 } = {}
+    { delay: defaultDelay = 75, delayMap, begin = 0, animationScale = 2 } = {}
   ) => {
     try {
       let minX = Infinity;
@@ -282,7 +282,7 @@ export default class WfFileReader {
 
           return {
             frame: resized,
-            delay: frameDelay,
+            delay: delayMap && delayMap[idx] ? delayMap[idx] : frameDelay,
           };
         })
       );
@@ -574,6 +574,8 @@ export default class WfFileReader {
             });
           }
         }
+
+        console.log(destPath);
 
         if (!isDuplicated || extractAll) {
           if (!dirCache[destPath]) {
