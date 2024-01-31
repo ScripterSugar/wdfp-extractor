@@ -16,8 +16,6 @@ Check out the [release page of this repo](https://github.com/ScripterSugar/wdfp-
 
 Runs on Windows, Mac or Linux machines.
 
-Hardware device / emulator asset pulling only supported by Windows 10 or greater.
-
 #### Pulling from API
 
 Some regions may not be able to call asset download api (For example, KR/CN Ips are banned from JP api server.) If you have trouble pulling assets from API, consider using VPN to call those APIs
@@ -49,6 +47,7 @@ To use this tool, your device should at least have file-listing access to the /d
 
 - Pixel 2 (Android 11)
 - Pixel 4 XL (Android 12)
+- Pixel 6 Pro (Android 13)
 
 ## Usage
 
