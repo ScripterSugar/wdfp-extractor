@@ -706,8 +706,6 @@ class WfExtractor {
           logFn: (chunk, resolver) => {
             const data = chunk.toString();
 
-            console.log(data);
-
             if (!logStarted) {
               logger.data({
                 type: 'progressStart',
@@ -1611,7 +1609,6 @@ class WfExtractor {
       try {
         await this.fileReader.readGeneralAndCreateOutput(filePath, fileName);
       } catch (err) {
-        console.log(fileName);
         console.log(err);
       }
     }
@@ -3281,7 +3278,6 @@ class WfExtractor {
     });
 
     for (const sequence of timeline.sequences) {
-      console.log(sequence);
       const { begin, end, name } = sequence;
       const sequencePrefix = name
         .split('_')

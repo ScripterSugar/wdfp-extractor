@@ -98,12 +98,18 @@ export default class WfFileReader {
         continue;
       }
 
-      targetDirectories.push({
-        dirPath,
-        subDirs,
+      const actualSubDirs = subDirs.filter((subDir) => {
+        const subDirPath = `${dirPath}/${subDir}`;
+
+        return fs.lstatSync(subDirPath).isDirectory();
       });
 
-      totalCount += subDirs.length;
+      targetDirectories.push({
+        dirPath,
+        subDirs: actualSubDirs,
+      });
+
+      totalCount += actualSubDirs.length;
     }
 
     logger.data({
@@ -574,8 +580,6 @@ export default class WfFileReader {
             });
           }
         }
-
-        console.log(destPath);
 
         if (!isDuplicated || extractAll) {
           if (!dirCache[destPath]) {
