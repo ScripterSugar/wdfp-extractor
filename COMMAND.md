@@ -7,11 +7,57 @@ Supported commands are like below:
 
 Crop normal/special sprite sheet of specific character and create animated gif of it. characterId is dev id of specific character, for example characterId of fluffy is combat_animal.
 
+If you want to generate animated GIF of boss monsters (as in battle/boss/*), use the animateBoss command instead
+
 #### Options:
-**-character \<characterId\>**    Specify characterId you want to create animation for.
+**-character \<characterId\>**    Specify characterId you want to create animation for. Either this or general argument is required.
+
+**-general \<path_to_sprite\>**   Specify path to the sprite_sheet you want to generate animated GIFs based on timeline/atlas file located along with the sprite. Either this or character argument is required.
+
+**-scale \<ratio\>**              Specify scale of generated GIF. default to 1.
+
+**-sheetName \<sheetName\>**      Specify name of the sprite sheet png file in the target directory. Default to "sprite_sheet".
+
+**-atlasName \<atlasName\>**      Specify name of the *.atlas.json file in the target directory. Default to "sprite_sheet".
+
+**-timelineName \<timeline\>**    Specify name of the *.timeline.json file in the target directory. Default to "pixelart".
+
+**-metaName \<metaName\>**        Specify name of the sprite_sheet, atlas, timeline name at the same time, if they're all same.
+
 
 #### Example:
 animate -character combat_animal
+
+animate -general character/big_bear_monster_light/pixelart -scale 2
+
+
+
+## animateBoss [option]
+
+Create animated gif based on specific sprite_sheet with .parts / .timeline / .atlas file. .parts file is required to execute this command.
+
+If you want to generate animated GIF of common characters (as in character/*), use the animate command instead
+
+#### Options:
+**-sprite \<path_to_sprite\>**    Specify path to the sprite_sheet you want to generate animated GIFs based on parts file located along with the sprite. Required.
+
+**-scale \<ratio\>**              Specify scale of generated GIF. default to 1.
+
+**-meta \<partsName\>**           Specify name root of the parts/timeline/atlas file, if you'd like to pick just one. if this is not specified, command will target all the parts file that is found within target directory.
+
+**-merge**                        If this flag is set, while generating GIFs, tool will try to merge same group of GIFs into a single GIF, such as `skill_start1, skill_charge1, skill_attack1, skill_attack_loop1, skill_attack_end1`
+
+**-frameMs \<milliseconds\>**     Specify the time span of a single frame, in milliseconds. Default to 16 (60 frames in one second)
+
+**-mergeLoopAmount \<int\>**      While merging, loop animations will loop number of times as specified. Default to 8.
+
+**-mergeChargeAmount \<int\>**    While merging, charge animations will loop number of times as specified. Default to 3.
+
+
+#### Example:
+animateBoss -sprite battle/boss/maou_2nd/maou_2nd -scale 2 -merge
+
+animateBoss -meta high_epuration_boss_3anv -sprite battle/boss/high_epuration_boss_3anv/high_epuration_boss_3anv -scale 4 -merge
 
 
 ## sprite [option] [assetpath]
