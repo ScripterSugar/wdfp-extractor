@@ -3072,9 +3072,71 @@ class WfExtractor {
         let metaName;
         let scale;
         let frameMs;
+        let searchAll = false;
+        let searchTargetPath = 'battle/boss';
         let mergeGroupAnimation = false;
         let mergeLoopAmount = 8;
         let mergeChargeAmount = 3;
+
+        const searchPathForBossAssets = async (
+          parentPath: string
+        ): Promise<
+          {
+            metaFile: string;
+            spriteName: string;
+            atlasName: string;
+            subPath: string;
+          }[]
+        > => {
+          const foundSubPaths = await readdir(parentPath);
+
+          const subDirectories = foundSubPaths.filter((subPath) => {
+            return fs.statSync(`${parentPath}/${subPath}`).isDirectory();
+          });
+
+          const bossAssets: {
+            metaFile: string;
+            spriteName: string;
+            atlasName: string;
+            subPath: string;
+          }[] = [];
+
+          const subPngFile = foundSubPaths.find((subPath) => {
+            return subPath.endsWith('.png');
+          });
+
+          const subAtlasFile = foundSubPaths.find((subPath) => {
+            return subPath.endsWith('.atlas.json');
+          });
+
+          const subPartsFiles = foundSubPaths.filter((subPath) => {
+            return subPath.endsWith('.parts.json');
+          });
+
+          if (subPartsFiles.length && subPngFile && subAtlasFile) {
+            subPartsFiles.forEach((partsFile) => {
+              bossAssets.push({
+                metaFile: partsFile.replace('.parts.json', ''),
+                spriteName: subPngFile.replace('.png', ''),
+                atlasName: subAtlasFile.replace('.atlas.json', ''),
+                subPath: `${parentPath}`,
+              });
+            });
+          }
+
+          return [
+            ...bossAssets,
+            ...(
+              await Promise.all(
+                subDirectories.map((subDirectory) => {
+                  return searchPathForBossAssets(
+                    `${parentPath}/${subDirectory}`
+                  );
+                })
+              )
+            ).reduce((acc, cur) => [...acc, ...cur], []),
+          ];
+        };
 
         args.forEach((arg, idx) => {
           if (/^-scale$/.test(arg)) {
@@ -3098,9 +3160,15 @@ class WfExtractor {
           if (/^-mergeChargeAmount$/.test(arg)) {
             mergeChargeAmount = parseFloat(args[idx + 1] || 3);
           }
+          if (/^-all$/.test(arg)) {
+            searchAll = true;
+          }
+          if (/^-searchTarget/.test(arg)) {
+            searchTargetPath = args[idx + 1];
+          }
         });
 
-        if (!spritePath) {
+        if (!spritePath && !searchAll) {
           return logger.log('Invalid parameter. -sprite (-S) [path] required.');
         }
 
@@ -3114,6 +3182,39 @@ class WfExtractor {
             mergeGroupAnimation,
             mergeChargeAmount,
           });
+        } else if (searchAll) {
+          const foundBossAssets = await searchPathForBossAssets(
+            `${this.ROOT_PATH}/output/assets/${searchTargetPath}`
+          );
+
+          const progressTracker = logger.progressStart({
+            id: `Generating boss animation GIFs for searched boss sprites...`,
+            max: foundBossAssets.length,
+          });
+
+          for (const bossAsset of foundBossAssets) {
+            progressTracker.progress();
+            try {
+              await this.processBossSpritesWithParts({
+                spritePath: `${bossAsset.subPath.replace(
+                  `${this.ROOT_PATH}/output/assets/`,
+                  ''
+                )}/${bossAsset.spriteName}`,
+                atlasName: bossAsset.atlasName,
+                metaName: bossAsset.metaFile,
+                scale,
+                frameMs,
+                mergeLoopAmount,
+                mergeGroupAnimation,
+                mergeChargeAmount,
+              });
+            } catch (err) {
+              logger.log(
+                `Failed to generate animation gif for boss: ${bossAsset.metaFile}`
+              );
+            }
+          }
+          progressTracker.end();
         } else {
           const targetDir = `${this.ROOT_PATH}/output/assets/${spritePath
             .split('/')
@@ -3129,7 +3230,6 @@ class WfExtractor {
 
           let images;
           for (const partsFile of partsFiles) {
-            console.log('Processing', partsFile.replace('.parts.json', ''));
             images = await this.processBossSpritesWithParts({
               spritePath,
               metaName: partsFile.replace('.parts.json', ''),
@@ -3155,6 +3255,7 @@ class WfExtractor {
 
   processBossSpritesWithParts = async ({
     spritePath,
+    atlasName,
     metaName,
     scale = 1,
     frameMs = 16,
@@ -3164,6 +3265,7 @@ class WfExtractor {
     prebuiltImages,
   }: {
     spritePath: string;
+    atlasName?: string;
     metaName?: string;
     scale?: number;
     frameMs?: number;
@@ -3191,7 +3293,9 @@ class WfExtractor {
     const sortedImages = [];
 
     const spriteAtlases = JSON.parse(
-      (await asyncReadFile(`${destPath}/${bossName}.atlas.json`)).toString()
+      (
+        await asyncReadFile(`${destPath}/${atlasName || bossName}.atlas.json`)
+      ).toString()
     );
 
     const spriteImage = await asyncReadFile(`${destPath}/${bossName}.png`);
@@ -3252,10 +3356,6 @@ class WfExtractor {
           currentFrame.referencingFrame
         );
       }
-
-      logger.log(
-        `Can't reference final frame for graphicId ${currentFrame.id}, frame number ${currentFrame.referencingFrame}`
-      );
 
       return null;
     }
