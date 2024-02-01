@@ -53,11 +53,17 @@ If you want to generate animated GIF of common characters (as in character/*), u
 
 **-mergeChargeAmount \<int\>**    While merging, charge animations will loop number of times as specified. Default to 3.
 
+**-all**                          Recursively search target directory specified by -searchTarget and find all boos-like sprites / parts metadata and generate animation if possible.
+
+**-searchTarget**                 Target directory to search when -all flag is set. Default to `battle/boss`
+
 
 #### Example:
 animateBoss -sprite battle/boss/maou_2nd/maou_2nd -scale 2 -merge
 
 animateBoss -meta high_epuration_boss_3anv -sprite battle/boss/high_epuration_boss_3anv/high_epuration_boss_3anv -scale 4 -merge
+
+animateBoss -all -searchTarget battle/boss -scale 2 -merge -mergeLoopAmount 5 -mergeChargeAmount 2
 
 
 ## sprite [option] [assetpath]
