@@ -1368,7 +1368,7 @@ class WfExtractor {
 
     for (const filePath of paths ||
       [...new Set([...(this.asFilePaths || []), ...this.filePaths])].filter(
-        (value) => !!value
+        (value) => !!value && typeof value === 'string'
       )) {
       pushExist(
         possibleImageAssets,
