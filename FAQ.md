@@ -37,3 +37,4 @@ So if you want to extract those assets manually, follow the next steps.
 6. Try extracting assets again.
 
 If you can't still find assets after 6 but command in 5.1 works, make sure you turned on the `Search ActionScripts for assets` option and put all the decompiled SWF scripts in the right location. or you can try manually extract them one by one using commands. note that the paths you mentioned above are generated paths and they're actually included in one same sprite file named `scene/general/sprite_sheet` so you'd want to run sprite `scene/general/sprite_sheet` command to crop the image and save cropped sprite to designated path.
+
