@@ -1,6 +1,6 @@
 {
   "name": "wdfp-extractor",
-  "version": "0.6.10",
+  "version": "0.6.11",
   "description": "World Flipper asset extractor.",
   "scripts": {
     "build": "concurrently \"npm run build:main\" \"npm run build:renderer\"",
@@ -216,4 +216,3 @@
     "singleQuote": true
   }
 }
-
