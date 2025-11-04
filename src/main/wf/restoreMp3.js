@@ -195,6 +195,7 @@ const spliceBuffer = (buffer, targetIndex, deleteCount, ...items) => {
 
 const restoreCorruptedMp3 = async (filePath, debug) => {
   let file = await readFile(filePath);
+  let modifiedTit2BlockLastByteIndex = 0;
 
   const hexString = file.toString('hex');
   if (hexString.slice(0, 6) === '494433') {
@@ -207,12 +208,24 @@ const restoreCorruptedMp3 = async (filePath, debug) => {
         hexString.slice(tit2Index + 8, tit2Index + 16),
         16
       );
-      const shiftJisTitle = file.slice(
+      const rawTit2Title = file.slice(
         tit2Index / 2 + 11,
         tit2Index / 2 + 11 + tit2Size - 1
       );
-      const decodedTitle = iconv.decode(shiftJisTitle, 'SHIFT_JIS');
+
+      let encoding = 'SHIFT_JIS';
+
+      if (
+        file.slice(tit2Index / 2 + 10, tit2Index / 2 + 11).toString('hex') ===
+        '01'
+      ) {
+        console.log('UTF-16 encoded tit2 found');
+        encoding = 'utf-16';
+      }
+
+      const decodedTitle = iconv.decode(rawTit2Title, encoding);
       const utf8Title = iconv.encode(decodedTitle, 'utf-16');
+
       file[encodingByteIndex] = 1;
       utf8Title.length
         .toString(16)
@@ -226,18 +239,24 @@ const restoreCorruptedMp3 = async (filePath, debug) => {
       try {
         if (tit2Size > 1024) throw Error('TOO LARGE TIT2');
         file = spliceBuffer(file, tit2Index / 2 + 11, tit2Size, ...utf8Title);
+        modifiedTit2BlockLastByteIndex =
+          tit2Index / 2 + 11 + utf8Title.length - tit2Size;
       } catch (err) {
         console.log(debug, tit2Index, tit2Size);
       }
     }
   }
 
-  let byteIndex = file.toString('hex').indexOf('7ffb') / 2;
+  let byteIndex =
+    file.toString('hex').indexOf('7ffb', modifiedTit2BlockLastByteIndex * 2) /
+    2;
 
   while (byteIndex < file.byteLength) {
     const header = file.slice(byteIndex, byteIndex + 4).toString('hex');
     const binaryHeader = hexesToBin(header);
     if (!/^7f/.test(header)) {
+      console.log(byteIndex);
+      console.log('Wrong header', header);
       break;
     }
     file[byteIndex] = 255;

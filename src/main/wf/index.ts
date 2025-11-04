@@ -2999,6 +2999,7 @@ class WfExtractor {
           '.esdl.amf3',
           '.esdl.json',
           '.esdl',
+          '.mp3',
           ...customFormats,
           ...COMMON_FILE_FORMAT,
         ]) {
@@ -3011,9 +3012,11 @@ class WfExtractor {
 
           if (found) {
             logger.log(`Asset found at ${curPath}`);
+            logger.log(`${found[0]} ${found[1]}`);
           }
           if (digestFound) {
             logger.log(`Asset found at ${curDigestPath}`);
+            logger.log(`${digestFound[0]} ${digestFound[1]}`);
           }
 
           if (found || digestFound) {
